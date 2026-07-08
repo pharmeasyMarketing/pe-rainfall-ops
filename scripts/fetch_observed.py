@@ -27,8 +27,11 @@ import common as C
 
 GRANULE_TMPL = (
     "https://gpm1.gesdisc.eosdis.nasa.gov/data/GPM_L3/GPM_3IMERGDL.07/"
-    "{y}/{m:02d}/3B-DAY-L.MS.MRG.3IMERG.{y}{m:02d}{d:02d}-S000000-E235959.V07B.nc4"
+    "{y}/{m:02d}/3B-DAY-L.MS.MRG.3IMERG.{y}{m:02d}{d:02d}-S000000-E235959.{ver}.nc4"
 )
+# IMERG bumps the letter suffix over time; try newest first, cache what works.
+VERSION_CANDIDATES = ["V07D", "V07C", "V07B", "V07A"]
+_working_version: list = []
 
 
 def existing_observed_dates():
@@ -51,11 +54,22 @@ def read_imerg_day(day):
     token = os.environ.get("EARTHDATA_TOKEN")
     if not token:
         raise SystemExit("EARTHDATA_TOKEN not set — needed for IMERG download.")
-    url = GRANULE_TMPL.format(y=day.year, m=day.month, d=day.day)
+    versions = _working_version or VERSION_CANDIDATES
+    r = None
+    for ver in versions:
+        url = GRANULE_TMPL.format(y=day.year, m=day.month, d=day.day, ver=ver)
+        r = requests.get(url, headers={"Authorization": f"Bearer {token}"},
+                         timeout=180, allow_redirects=True)
+        if r.status_code == 404:
+            continue
+        r.raise_for_status()
+        if not _working_version:
+            _working_version.append(ver)
+            print(f"[imerg] using product version {ver}")
+        break
+    else:
+        raise FileNotFoundError(f"no IMERG granule for {day} in {versions}")
     tmp = C.DATA / f"_imerg_{day}.nc4"
-    r = requests.get(url, headers={"Authorization": f"Bearer {token}"},
-                     timeout=180, allow_redirects=True)
-    r.raise_for_status()
     tmp.write_bytes(r.content)
     try:
         with h5py.File(tmp, "r") as h:

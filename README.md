@@ -121,13 +121,17 @@ The Phase-2 **`vulnerability_score`** is a per-*pincode* quantity — it joins o
    GeoNames match; 409 patched via pincode-prefix neighbours — see `geo_source` column). To
    improve centroids later, replace lat/lon with the mean of PharmEasy's own geocoded delivery
    addresses per pincode.
-2. **NASA Earthdata token** (free) → repo secret `EARTHDATA_TOKEN` (for IMERG).
-3. **Switch mode:** set repo variable `RAINOPS_MODE=real`.
-4. **Backfill history:** `EARTHDATA_TOKEN=… python scripts/backfill_june15.py` then `python
-   scripts/score.py && python scripts/build_site.py`.
-5. Two files (`fetch_forecast.py`, `fetch_observed.py`) each have a short **"VALIDATE ON FIRST
-   RUN"** note — the GEFS accumulation semantics and the IMERG granule path should be confirmed
-   against one real run (weather-data plumbing always has one or two product-string quirks).
+2. ~~NASA Earthdata token~~ **Done** — repo secret `EARTHDATA_TOKEN` set (regenerate yearly at
+   urs.earthdata.nasa.gov; requires the "NASA GESDISC DATA ARCHIVE" app authorized).
+3. ~~Switch mode~~ **Done** — repo variable `RAINOPS_MODE=real`.
+4. **Backfill is automatic:** both fetchers self-heal — every scheduled run fills any missing
+   archive dates since June 15 (GEFS: previous-day 12Z cycles; IMERG: every missing day), under a
+   time budget (`RAINOPS_BACKFILL_BUDGET_MIN`, default 240) so a big backlog spreads safely
+   across runs.
+5. ~~Validate GEFS semantics~~ **Done 2026-07-08:** GEFS APCP confirmed as 6-hour buckets
+   (`GRIB_stepRange "6-12"` at f012) — daily totals are bucket sums, and the fetcher re-detects
+   the semantics at runtime so a future NCEP change fails loudly, not silently. IMERG granule
+   version is auto-discovered (V07D→V07A).
 
 ## Credits / attribution
 

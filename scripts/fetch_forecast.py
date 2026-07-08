@@ -1,38 +1,39 @@
 """REAL forecast ingest — NOAA GEFS 31-member ensemble via AWS Open Data.
 
-Writes data/forecasts/<run>.csv.gz in the exact PER-CELL schema
-gen_sample_data.py produces, so score.py / build_site.py are mode-agnostic
-(pincodes inherit their cell's forecast downstream via pincodes.csv).
+Writes data/forecasts/<date>.csv.gz in the PER-CELL schema shared with sample
+mode. Also SELF-HEALS the archive: any missing run date since ARCHIVE_START is
+backfilled from the GEFS AWS archive with the cycle that would have been
+available at a real 05:00 IST refresh (previous day's 12Z).
 
-Pipeline per run:
-  1. unique 0.25 deg grid cells = pincode cells + origin-hub cells;
-  2. pick the latest complete GEFS cycle;
-  3. for each of the 31 members, pull surface APCP (accumulated precip) at 24-hour
-     boundaries fxx = 0,24,...,168 and difference to get daily totals per cell;
-  4. per cell/day, compute median, p10, p90, P(>30), P(>60) across the 31 members.
+VALIDATED 2026-07-08 against gefs.20260707/12 on AWS:
+  * APCP arrives as 6-HOUR BUCKETS (GRIB_stepRange "6-12" at fxx=12), so a
+    day's total = sum of four 6-h buckets — NOT a difference of 24 h
+    boundaries. Detected at runtime anyway (see detect_semantics) and the
+    fetch strategy branches, so a future NCEP product change degrades loudly,
+    not silently.
+  * variable decodes as 'tp', units kg m-2 (== mm); grid 0.5 deg, lon 0-360.
 
-Uses Herbie for byte-range GRIB access (only the APCP messages are downloaded).
+Day windows are mapped to IST calendar dates by window center: a 12Z cycle's
+hours 0-24 center at 12Z+12h+5:30 = 05:30 IST next day, so D0 of the morning
+refresh is "today in IST" — matching what the delivery team means by "today".
 
-    pip install herbie-data xarray cfgrib
+    pip install herbie-data xarray cfgrib eccodes numpy
     RAINOPS_MODE=real python scripts/pipeline.py
-
---- TWO THINGS TO VALIDATE ON THE FIRST LIVE RUN (they vary by GEFS product) ---
-  (A) product / variable string: 0p50 vs 0p25, and the APCP search regex;
-  (B) accumulation semantics: GEFS APCP buckets may reset every 6 h rather than
-      accumulate from t=0 — verify whether daily total = A(24(d+1)) - A(24d) or a
-      sum of 6-hourly buckets. The DAILY_FROM_RUN_TOTAL flag toggles this.
 """
 from __future__ import annotations
 
+import os
 import statistics
-from datetime import datetime, timedelta
+import time
+from datetime import date, datetime, timedelta
 
 import common as C
 
-N_MEMBERS = 31                    # gec00 + gep01..gep30
-GEFS_PRODUCT = "atmos.5"          # 0.5 deg; use "atmos.25" for 0.25 deg if needed
-APCP_SEARCH = ":APCP:surface"
-DAILY_FROM_RUN_TOTAL = True       # see note (B) above
+N_MEMBERS = 31                    # members 0 (control) + 1..30
+GEFS_PRODUCT = "atmos.5"          # pgrb2a 0.5 deg, 6-hourly to 384 h
+APCP_SEARCH = ":APCP:"
+STEP_H = 6
+IST_SHIFT = timedelta(hours=5, minutes=30)
 
 
 def unique_cells():
@@ -42,56 +43,83 @@ def unique_cells():
     return {cid: C.cell_center(cid) for cid in sorted(ids)}
 
 
-def latest_cycle(now_utc):
-    """Most recent GEFS cycle likely to be fully available (~5-6 h old)."""
+def latest_cycle(now_utc: datetime) -> datetime:
+    """Most recent GEFS cycle likely to be fully on AWS (~6 h behind)."""
     t = now_utc - timedelta(hours=6)
-    hour = (t.hour // 6) * 6
-    return t.replace(hour=hour, minute=0, second=0, microsecond=0)
+    return t.replace(hour=(t.hour // 6) * 6, minute=0, second=0, microsecond=0)
 
 
-def member_names():
-    return ["c00"] + [f"p{n:02d}" for n in range(1, N_MEMBERS)]
+def valid0_of(cycle: datetime) -> date:
+    """IST calendar date served as D0 (center of the cycle's first 24 h)."""
+    return (cycle + timedelta(hours=12) + IST_SHIFT).date()
 
 
-def fetch_cell_daily(cycle):
-    """Return {cell_id: {lead: [31 member daily-mm]}} for the given cycle.
+def detect_semantics(cycle: datetime) -> str:
+    """'buckets' (6-h accumulations) or 'runtotal' (0-fxx accumulations)."""
+    from herbie import Herbie
+    H = Herbie(cycle.strftime("%Y-%m-%d %H:%M"), model="gefs",
+               product=GEFS_PRODUCT, member=1, fxx=2 * STEP_H)
+    ds = H.xarray(APCP_SEARCH)
+    var = list(ds.data_vars)[0]
+    rng = str(ds[var].attrs.get("GRIB_stepRange", ""))
+    mode = "runtotal" if rng.startswith("0-") else "buckets"
+    print(f"[gefs] APCP stepRange@f{2*STEP_H:03d} = {rng!r} -> {mode}")
+    return mode
 
-    Real implementation with Herbie. Imported lazily so sample mode needs no deps.
+
+def fetch_cell_daily(cycle: datetime, mode: str | None = None) -> dict:
+    """{cell_id: {lead: [member daily-mm, ...]}} for one cycle.
+
+    Members with any missing/corrupt message are dropped whole (ensemble
+    shrinks rather than mixing partial days).
     """
-    from herbie import Herbie  # noqa: F401
+    from herbie import Herbie
     import numpy as np
+
+    if mode is None:
+        mode = detect_semantics(cycle)
 
     cells = unique_cells()
     cell_ids = list(cells)
     lats = np.array([cells[c][0] for c in cell_ids])
-    lons = np.array([cells[c][1] for c in cell_ids]) % 360  # GEFS uses 0..360
+    lons = np.array([cells[c][1] for c in cell_ids]) % 360  # GEFS lon 0..360
 
-    # accumulate: daily[cell_id][lead] -> list of member totals
+    horizon_h = (C.MAX_LEAD + 1) * 24
+    if mode == "buckets":
+        fxx_list = list(range(STEP_H, horizon_h + 1, STEP_H))
+    else:
+        fxx_list = [24 * d for d in range(1, C.MAX_LEAD + 2)]
+
     daily = {c: {d: [] for d in range(C.MAX_LEAD + 1)} for c in cell_ids}
-
-    for m in member_names():
-        # run-total accumulation at each 24 h boundary, per cell
-        acc = {}  # fxx_hours -> np.array over cells
-        needed = [24 * d for d in range(C.MAX_LEAD + 2)]  # 0,24,...,168
-        for fxx in needed:
-            if fxx == 0:
-                acc[0] = np.zeros(len(cell_ids))
-                continue
-            H = Herbie(cycle.strftime("%Y-%m-%d %H:%M"), model="gefs",
-                       member=m, fxx=fxx, product=GEFS_PRODUCT)
-            ds = H.xarray(APCP_SEARCH)
-            var = [v for v in ds.data_vars][0]
-            pts = ds[var].interp(
-                latitude=("points", lats), longitude=("points", lons)).values
-            acc[fxx] = np.asarray(pts, dtype=float)
+    kept = 0
+    for m in range(N_MEMBERS):
+        vals = {}  # fxx -> np.array over cells
+        try:
+            for fxx in fxx_list:
+                H = Herbie(cycle.strftime("%Y-%m-%d %H:%M"), model="gefs",
+                           product=GEFS_PRODUCT, member=m, fxx=fxx, verbose=False)
+                ds = H.xarray(APCP_SEARCH)
+                var = list(ds.data_vars)[0]
+                pts = ds[var].interp(
+                    latitude=("points", lats), longitude=("points", lons)).values
+                vals[fxx] = np.clip(np.asarray(pts, dtype=float), 0, None)
+                ds.close()
+        except Exception as e:  # noqa: BLE001
+            print(f"[gefs] member {m:02d} dropped ({type(e).__name__}: {e})")
+            continue
         for d in range(C.MAX_LEAD + 1):
-            if DAILY_FROM_RUN_TOTAL:
-                day_vals = acc[24 * (d + 1)] - acc[24 * d]
+            if mode == "buckets":
+                day = sum(vals[f] for f in range(24 * d + STEP_H, 24 * (d + 1) + 1, STEP_H))
             else:
-                day_vals = acc[24 * (d + 1)]
-            day_vals = np.clip(day_vals, 0, None)
+                prev = vals.get(24 * d)
+                day = vals[24 * (d + 1)] - (prev if prev is not None else 0.0)
+            day = np.clip(day, 0, None)
             for i, c in enumerate(cell_ids):
-                daily[c][d].append(float(day_vals[i]))
+                daily[c][d].append(float(day[i]))
+        kept += 1
+    if kept < min(8, N_MEMBERS):
+        raise RuntimeError(f"only {kept}/{N_MEMBERS} members usable for {cycle:%Y-%m-%d %HZ}")
+    print(f"[gefs] cycle {cycle:%Y-%m-%d %HZ}: {kept}/{N_MEMBERS} members, {len(cell_ids)} cells")
     return daily
 
 
@@ -106,31 +134,57 @@ def summarize(vals):
     return median, p10, p90, p30, p60
 
 
-def snapshot_rows(run_date, run_ts, daily):
-    """Per-cell forecast rows in the shared archive schema."""
+def snapshot_rows(run_date: date, run_ts: str, daily: dict) -> list:
     rows = []
     for cid in sorted(daily):
         for lead in range(C.MAX_LEAD + 1):
             med, p10, p90, p30, p60 = summarize(daily[cid][lead])
-            valid = run_date + timedelta(days=lead)
-            rows.append([run_ts, cid, lead, valid,
+            rows.append([run_ts, cid, lead, run_date + timedelta(days=lead),
                          round(med, 1), round(p10, 1), round(p90, 1),
                          round(p30, 2), round(p60, 2),
                          C.band(p30, p60, med), C.lead_class(lead)])
     return rows
 
 
+def write_run(run_date: date, cycle: datetime, daily: dict, stamp: str) -> None:
+    C.write_csv_gz(C.FORECASTS / f"{run_date}.csv.gz", C.FORECAST_HEADER,
+                   snapshot_rows(run_date, stamp, daily))
+    print(f"[gefs] wrote {run_date} from cycle {cycle:%Y-%m-%d %HZ}")
+
+
 def main():
     now = datetime.utcnow()
     cycle = latest_cycle(now)
-    run_date = (cycle + timedelta(hours=5, minutes=30)).date()  # IST calendar day
-    run_ts = (cycle + timedelta(hours=5, minutes=30)).strftime("%Y-%m-%d %H:%M IST")
+    mode = detect_semantics(cycle)
 
-    daily = fetch_cell_daily(cycle)
-    out = C.FORECASTS / f"{run_date}.csv.gz"
-    C.write_csv_gz(out, C.FORECAST_HEADER, snapshot_rows(run_date, run_ts, daily))
-    print(f"[gefs] wrote {out} from cycle {cycle:%Y-%m-%d %HZ} "
-          f"({len(daily)} cells, {N_MEMBERS} members)")
+    # --- live refresh (always overwrite today's file with the freshest cycle)
+    v0 = valid0_of(cycle)
+    stamp = f"{v0} {(now + IST_SHIFT):%H:%M} IST"
+    write_run(v0, cycle, fetch_cell_daily(cycle, mode), stamp)
+
+    # --- self-heal: backfill any missing archive date since ARCHIVE_START ----
+    # Budgeted so a big backlog spreads safely across scheduled runs instead of
+    # risking the 6 h Actions job limit; each run commits its progress.
+    budget_min = float(os.environ.get("RAINOPS_BACKFILL_BUDGET_MIN", "240"))
+    t0 = time.monotonic()
+    have = {C.file_date(p) for p in C.archive_files(C.FORECASTS)}
+    missing = [d for d in C.daterange(C.ARCHIVE_START, v0 - timedelta(days=1))
+               if str(d) not in have]
+    if missing:
+        print(f"[gefs] self-heal: {len(missing)} missing run dates "
+              f"(budget {budget_min:.0f} min)")
+    for run_date in missing:
+        if (time.monotonic() - t0) / 60 > budget_min:
+            print(f"[gefs] backfill budget reached — remaining dates continue next run")
+            break
+        # cycle a real 05:00 IST refresh would have used: previous day's 12Z
+        cyc = datetime(run_date.year, run_date.month, run_date.day, 12) - timedelta(days=1)
+        try:
+            daily = fetch_cell_daily(cyc, mode)
+        except Exception as e:  # noqa: BLE001
+            print(f"[gefs] backfill {run_date} unavailable ({e}) — skipping")
+            continue
+        write_run(run_date, cyc, daily, f"{run_date} 05:00 IST")
 
 
 if __name__ == "__main__":
