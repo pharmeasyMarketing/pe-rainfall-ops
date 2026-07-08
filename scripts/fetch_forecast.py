@@ -67,13 +67,78 @@ def detect_semantics(cycle: datetime) -> str:
     return mode
 
 
+def _member_daily(m: int, cycle: datetime, mode: str, lats, lons, fxx_list):
+    """One member's per-lead per-cell daily mm, or None if any message fails.
+
+    Runs in a worker thread; members are independent GRIB files so there is no
+    shared state and no cross-member file contention.
+    """
+    from herbie import Herbie
+    import numpy as np
+
+    vals = {}
+    try:
+        for fxx in fxx_list:
+            for attempt in range(3):  # salvage members from transient S3 timeouts
+                try:
+                    H = Herbie(cycle.strftime("%Y-%m-%d %H:%M"), model="gefs",
+                               product=GEFS_PRODUCT, member=m, fxx=fxx, verbose=False)
+                    ds = H.xarray(APCP_SEARCH)
+                    var = list(ds.data_vars)[0]
+                    pts = ds[var].interp(
+                        latitude=("points", lats), longitude=("points", lons)).values
+                    vals[fxx] = np.clip(np.asarray(pts, dtype=float), 0, None)
+                    ds.close()
+                    break
+                except Exception:  # noqa: BLE001
+                    if attempt == 2:
+                        raise
+                    time.sleep(2.0 * (attempt + 1))
+    except Exception as e:  # noqa: BLE001
+        return m, None, f"{type(e).__name__}: {e}"
+
+    days = []
+    for d in range(C.MAX_LEAD + 1):
+        if mode == "buckets":
+            day = sum(vals[f] for f in range(24 * d + STEP_H, 24 * (d + 1) + 1, STEP_H))
+        else:
+            prev = vals.get(24 * d)
+            day = vals[24 * (d + 1)] - (prev if prev is not None else 0.0)
+        days.append(np.clip(day, 0, None))
+    return m, days, None
+
+
+def _fetch_members(cycle, mode, lats, lons, fxx_list, workers):
+    """Yield (m, days, err) for all members.
+
+    Uses PROCESS-level parallelism: eccodes/cfgrib (the GRIB2 C decoder) is not
+    thread-safe — concurrent decodes in threads segfault — but separate
+    processes each get their own eccodes state. Falls back to serial if the
+    pool can't start (e.g. sandbox without fork/spawn).
+    """
+    from concurrent.futures import ProcessPoolExecutor, as_completed
+    args = [(m, cycle, mode, lats, lons, fxx_list) for m in range(N_MEMBERS)]
+    if workers > 1:
+        try:
+            with ProcessPoolExecutor(max_workers=workers) as ex:
+                futs = [ex.submit(_member_daily, *a) for a in args]
+                for fut in as_completed(futs):
+                    yield fut.result()
+            return
+        except Exception as e:  # noqa: BLE001  (BrokenProcessPool, OSError, ...)
+            print(f"[gefs] process pool unavailable ({type(e).__name__}: {e}) "
+                  f"— serial fallback")
+    for a in args:
+        yield _member_daily(*a)
+
+
 def fetch_cell_daily(cycle: datetime, mode: str | None = None) -> dict:
     """{cell_id: {lead: [member daily-mm, ...]}} for one cycle.
 
-    Members with any missing/corrupt message are dropped whole (ensemble
-    shrinks rather than mixing partial days).
+    Members are fetched concurrently (each = 28 independent byte-range reads);
+    a member with any missing/corrupt message is dropped whole so the ensemble
+    shrinks rather than mixing partial days.
     """
-    from herbie import Herbie
     import numpy as np
 
     if mode is None:
@@ -90,36 +155,22 @@ def fetch_cell_daily(cycle: datetime, mode: str | None = None) -> dict:
     else:
         fxx_list = [24 * d for d in range(1, C.MAX_LEAD + 2)]
 
+    workers = int(os.environ.get("RAINOPS_FETCH_WORKERS", "6"))
     daily = {c: {d: [] for d in range(C.MAX_LEAD + 1)} for c in cell_ids}
     kept = 0
-    for m in range(N_MEMBERS):
-        vals = {}  # fxx -> np.array over cells
-        try:
-            for fxx in fxx_list:
-                H = Herbie(cycle.strftime("%Y-%m-%d %H:%M"), model="gefs",
-                           product=GEFS_PRODUCT, member=m, fxx=fxx, verbose=False)
-                ds = H.xarray(APCP_SEARCH)
-                var = list(ds.data_vars)[0]
-                pts = ds[var].interp(
-                    latitude=("points", lats), longitude=("points", lons)).values
-                vals[fxx] = np.clip(np.asarray(pts, dtype=float), 0, None)
-                ds.close()
-        except Exception as e:  # noqa: BLE001
-            print(f"[gefs] member {m:02d} dropped ({type(e).__name__}: {e})")
+    for m, days, err in _fetch_members(cycle, mode, lats, lons, fxx_list, workers):
+        if days is None:
+            print(f"[gefs] member {m:02d} dropped ({err})")
             continue
         for d in range(C.MAX_LEAD + 1):
-            if mode == "buckets":
-                day = sum(vals[f] for f in range(24 * d + STEP_H, 24 * (d + 1) + 1, STEP_H))
-            else:
-                prev = vals.get(24 * d)
-                day = vals[24 * (d + 1)] - (prev if prev is not None else 0.0)
-            day = np.clip(day, 0, None)
+            col = days[d]
             for i, c in enumerate(cell_ids):
-                daily[c][d].append(float(day[i]))
+                daily[c][d].append(float(col[i]))
         kept += 1
     if kept < min(8, N_MEMBERS):
         raise RuntimeError(f"only {kept}/{N_MEMBERS} members usable for {cycle:%Y-%m-%d %HZ}")
-    print(f"[gefs] cycle {cycle:%Y-%m-%d %HZ}: {kept}/{N_MEMBERS} members, {len(cell_ids)} cells")
+    print(f"[gefs] cycle {cycle:%Y-%m-%d %HZ}: {kept}/{N_MEMBERS} members, "
+          f"{len(cell_ids)} cells, {workers} workers")
     return daily
 
 
