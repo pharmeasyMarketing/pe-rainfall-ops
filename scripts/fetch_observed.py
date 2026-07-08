@@ -13,10 +13,11 @@ Earthdata login; put a bearer token in the EARTHDATA_TOKEN env var / CI secret
 Fills any missing observed day from ARCHIVE_START up to (yesterday) that we don't
 already have, so a gap self-heals on the next run.
 
---- VALIDATE ON FIRST RUN ---
-  * exact GES DISC granule URL pattern for GPM_3IMERGDL v07;
-  * the HDF5 variable path ('/Grid/precipitation') and its (lon,lat) axis order
-    and units (mm/day vs mm/hr) — IMERG daily is mm/day.
+Robust by construction: granule product version (V07x) and the HDF5 variable
+layout are auto-discovered at runtime (the first run against a real granule
+showed a bare hard-coded '/Grid/precipitation' path is not reliable), and the
+(lon,lat) vs (lat,lon) orientation is detected from array shapes. Units are
+mm/day.
 """
 from __future__ import annotations
 
@@ -32,6 +33,8 @@ GRANULE_TMPL = (
 # IMERG bumps the letter suffix over time; try newest first, cache what works.
 VERSION_CANDIDATES = ["V07D", "V07C", "V07B", "V07A"]
 _working_version: list = []
+_structure_logged: list = []
+HDF5_MAGIC = b"\x89HDF\r\n\x1a\n"
 
 
 def existing_observed_dates():
@@ -69,23 +72,56 @@ def read_imerg_day(day):
         break
     else:
         raise FileNotFoundError(f"no IMERG granule for {day} in {versions}")
+    # Guard: a stripped-auth redirect returns an HTML login page (HTTP 200),
+    # not a granule. Fail loudly with the first bytes rather than feeding junk
+    # to h5py (which would raise a confusing unrelated error).
+    if r.content[:8] != HDF5_MAGIC:
+        raise ValueError(f"not an HDF5 granule (first bytes {r.content[:24]!r}) "
+                         f"— check EARTHDATA_TOKEN + 'NASA GESDISC DATA ARCHIVE' app auth")
+
     tmp = C.DATA / f"_imerg_{day}.nc4"
     tmp.write_bytes(r.content)
     try:
         with h5py.File(tmp, "r") as h:
-            precip = h["/Grid/precipitation"][:]        # (time, lon, lat) mm/day
-            glon = h["/Grid/lon"][:]
-            glat = h["/Grid/lat"][:]
-        precip = np.squeeze(precip)                     # (lon, lat)
-
-        def field(lat, lon):
-            i = int(np.abs(glon - lon).argmin())
-            j = int(np.abs(glat - lat).argmin())
-            v = float(precip[i, j])
-            return max(0.0, v)
-        return field
+            # Auto-discover datasets by basename so we don't hard-code a path
+            # that a product revision might move (the V07 daily layout wasn't
+            # confirmed until this ran against a real granule).
+            paths = {}
+            h.visititems(lambda name, obj: paths.setdefault(
+                name.split("/")[-1].lower(), name) if isinstance(obj, h5py.Dataset) else None)
+            if not _structure_logged:
+                _structure_logged.append(True)
+                interesting = ("precipitation", "precipitationcal", "lon", "lat",
+                               "longitude", "latitude", "time")
+                print("[imerg] granule datasets: "
+                      + ", ".join(f"{k}{h[paths[k]].shape}" for k in interesting if k in paths))
+            p_name = paths.get("precipitation") or paths.get("precipitationcal")
+            lon_name = paths.get("lon") or paths.get("longitude")
+            lat_name = paths.get("lat") or paths.get("latitude")
+            if not (p_name and lon_name and lat_name):
+                raise KeyError(f"precip/lon/lat not found; datasets={sorted(paths)[:14]}")
+            precip = np.squeeze(np.asarray(h[p_name][:], dtype=float))
+            glon = np.asarray(h[lon_name][:], dtype=float)
+            glat = np.asarray(h[lat_name][:], dtype=float)
     finally:
         tmp.unlink(missing_ok=True)
+
+    precip = np.where(precip < 0, 0.0, precip)          # -9999.9 fill -> 0
+    nlon, nlat = len(glon), len(glat)
+    if precip.shape == (nlon, nlat):
+        lon_first = True
+    elif precip.shape == (nlat, nlon):
+        lon_first = False
+    else:
+        raise ValueError(f"precip shape {precip.shape} matches neither "
+                         f"(lon={nlon}, lat={nlat}) orientation")
+
+    def field(lat, lon):
+        i = int(np.abs(glon - lon).argmin())
+        j = int(np.abs(glat - lat).argmin())
+        v = precip[i, j] if lon_first else precip[j, i]
+        return max(0.0, float(v))
+    return field
 
 
 def main():
