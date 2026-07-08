@@ -28,12 +28,19 @@ def main():
 
     import fetch_forecast
     fetch_forecast.main()
+    import fetch_ecmwf          # second backbone for the bake-off scoreboard
+    try:
+        fetch_ecmwf.main()
+    except Exception as e:      # ECMWF must never block the primary refresh
+        print(f"[pipeline] ECMWF fetch failed ({type(e).__name__}: {e}) — continuing")
     import fetch_observed
     fetch_observed.main()
     import calibrate
     calibrate.main()
     import score
     score.main()
+    import scoreboard
+    scoreboard.main()
     import build_site
     build_site.main()
     print("[pipeline] done")

@@ -282,6 +282,66 @@
     host.appendChild(foot);
   }
 
+  // ---- backbone scoreboard ------------------------------------------------
+  function renderScoreboard() {
+    var sb = D.scoreboard;
+    if (!sb || !sb.providers || !sb.n_comparisons) return;
+    var g = sb.providers.gefs.overall, e = sb.providers.ecmwf.overall;
+    if (!g || !e) return;
+    $("#scoreboardPanel").hidden = false;
+    var host = $("#scoreboard");
+
+    host.appendChild(el("p", { class: "sb-note" },
+      "Both are free & commercially clean (GEFS US public-domain, ECMWF CC-BY-4.0). Scored cell-by-cell on IMERG truth over " +
+      sb.n_days + " overlap day" + (sb.n_days === 1 ? "" : "s") + " (" + sb.n_comparisons.toLocaleString() +
+      " comparisons) — ECMWF has no long archive, so this accumulates daily."));
+
+    var cols = [
+      { k: "mae", label: "MAE (mm)", better: "low", fmt: function (v) { return v.toFixed(1); } },
+      { k: "bias", label: "Bias (mm)", better: "zero", fmt: function (v) { return (v > 0 ? "+" : "") + v.toFixed(1); } },
+      { k: "corr", label: "Correlation", better: "high", fmt: function (v) { return v.toFixed(2); } },
+      { k: "heavy_recall", label: "Heavy-rain recall", better: "high", fmt: function (v) { return v == null ? "—" : Math.round(v * 100) + "%"; } }
+    ];
+    function wins(c, a, b) {
+      if (a == null || b == null) return 0;
+      if (c.better === "low") return a < b ? -1 : a > b ? 1 : 0;
+      if (c.better === "high") return a > b ? -1 : a < b ? 1 : 0;
+      return Math.abs(a) < Math.abs(b) ? -1 : Math.abs(a) > Math.abs(b) ? 1 : 0;
+    }
+    var tbl = el("table", { class: "sb-table" });
+    var thead = el("thead"), htr = el("tr");
+    htr.appendChild(el("th", null, "Backbone"));
+    cols.forEach(function (c) { htr.appendChild(el("th", null, c.label)); });
+    thead.appendChild(htr); tbl.appendChild(thead);
+    var tb = el("tbody");
+    [["gefs", g, "NOAA GEFS", "ensemble median · free"], ["ecmwf", e, "ECMWF IFS", "HRES · free"]].forEach(function (row) {
+      var key = row[0], m = row[1], tr = el("tr");
+      var pc = el("td", { class: "prov" }); pc.innerHTML = row[2] + "<small>" + row[3] + "</small>"; tr.appendChild(pc);
+      cols.forEach(function (c) {
+        var w = wins(c, g[c.k], e[c.k]);
+        var isWin = (key === "gefs" && w === -1) || (key === "ecmwf" && w === 1);
+        tr.appendChild(el("td", isWin ? { class: "win" } : null, m[c.k] == null ? "—" : c.fmt(m[c.k])));
+      });
+      tb.appendChild(tr);
+    });
+    tbl.appendChild(tb); host.appendChild(tbl);
+
+    var h = sb.head_to_head;
+    if (h && h.gefs_win_pct != null) {
+      var wrap = el("div", { class: "sb-h2h" });
+      wrap.appendChild(el("span", null, "Closer to truth:"));
+      var bar = el("div", { class: "sb-bar" });
+      var gs = el("div", { class: "g" }); gs.style.width = h.gefs_win_pct + "%";
+      var es = el("div", { class: "e" }); es.style.width = h.ecmwf_win_pct + "%";
+      bar.appendChild(gs); bar.appendChild(es); wrap.appendChild(bar);
+      wrap.appendChild(el("span", null, "GEFS " + h.gefs_win_pct + "% · ECMWF " + h.ecmwf_win_pct + "%"));
+      host.appendChild(wrap);
+    }
+    host.appendChild(el("p", { class: "sb-note", style: "margin-top:12px" },
+      "Read: GEFS's ensemble median is smoother (lower error); ECMWF deterministic catches more heavy days. " +
+      "As the overlap grows this becomes the evidence base for whether to switch backbones or pay a vendor."));
+  }
+
   // ---- detail drawer ---------------------------------------------------------------
   function select(pin) {
     state.selected = pin; openDrawer(byPin[pin]); refreshMap();
@@ -428,7 +488,7 @@
   (function () {
     var cal = D.calibration || { by_lead: {}, fallback: { watch_median_mm: "?", act_median_mm: "?" } };
     var th = (cal.by_lead && cal.by_lead["1"]) || cal.fallback;
-    $("#footer").innerHTML = "Backbone: NOAA GEFS ensemble (public domain) · Truth: NASA GPM IMERG · " +
+    $("#footer").innerHTML = "Backbones: NOAA GEFS (public domain) + ECMWF IFS (CC-BY-4.0) · Truth: NASA GPM IMERG · " +
       "Geocoding: <a href='https://www.geonames.org/'>GeoNames</a> (CC BY 4.0) · " +
       "Bands calibrated to real skill (ensemble median, tuned per lead): tomorrow WATCH ≥" +
       Math.round(th.watch_median_mm) + "mm, ACT ≥" + Math.round(th.act_median_mm) + "mm · " +
@@ -436,5 +496,5 @@
       "(metros served by hyperlocal are not in this dataset). Built for the PharmEasy delivery team.";
   })();
 
-  buildMap(); renderTable(); renderTrust();
+  buildMap(); renderTable(); renderTrust(); renderScoreboard();
 })();

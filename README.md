@@ -66,12 +66,22 @@ Re-scoring/rebuilding the site from the existing archive (no fetch) needs no cre
 GitHub Actions (cron 2x/day: 05:00 & 16:30 IST, RAINOPS_MODE=real)
   └─ scripts/pipeline.py
        ├─ fetch_forecast.py  → NOAA GEFS 31-member ensemble (AWS Open Data, public domain)
+       ├─ fetch_ecmwf.py     → ECMWF IFS HRES (Open Data, CC-BY-4.0) — 2nd backbone, bake-off
        ├─ fetch_observed.py  → NASA GPM IMERG Late (truth source, ~1-day lag)
        ├─ calibrate.py       → per-lead band thresholds from the real archive → calibration.json
        ├─ score.py           → POD / FAR / reliability by lead day  → data/verification/
+       ├─ scoreboard.py      → GEFS vs ECMWF, both scored on IMERG → scoreboard.json
        └─ build_site.py      → site/data.js + site/downloads/latest.csv (+ history shards)
   └─ commit data/  → GitHub Pages redeploys
 ```
+
+**Backbone bake-off:** both backbones are free and commercially clean (GEFS = US public domain,
+ECMWF Open Data = CC-BY-4.0). `scoreboard.py` scores them cell-by-cell on the same IMERG truth over
+their overlapping days and the dashboard shows a running comparison — so any decision to switch
+backbones (or pay a vendor like Skymet/AccuWeather, which would slot into the same harness) is made
+on evidence. ECMWF Open Data keeps only a rolling ~few-day archive, so the scoreboard seeds from a
+short backfill and accumulates forward. (Open-Meteo's free tier is **non-commercial** and is
+therefore *not* used here — internal PharmEasy use is commercial use.)
 
 **Why GEFS (free) not a paid API:** it's US public domain (cleanest possible licence for internal
 commercial use), it's a real 31-member ensemble (so the probability bands are honest, not derived),

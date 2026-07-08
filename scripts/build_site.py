@@ -145,6 +145,9 @@ def main():
     ver = {}
     if (C.VERIFICATION / "summary.json").exists():
         ver = json.loads((C.VERIFICATION / "summary.json").read_text(encoding="utf-8"))
+    scoreboard = {}
+    if (C.VERIFICATION / "scoreboard.json").exists():
+        scoreboard = json.loads((C.VERIFICATION / "scoreboard.json").read_text(encoding="utf-8"))
 
     dl_bytes = build_download_csv(pincodes, cell_days, latest_run, run_ts)
 
@@ -163,6 +166,7 @@ def main():
         meta=dict(n_pincodes=len(pincodes), n_cells=len(cell_days),
                   latest_run=latest_run, history_days=HISTORY_DAYS),
         verification=ver,
+        scoreboard=scoreboard,
         hubs=hub_rows,
         cells=cell_days,
         pins=pins,

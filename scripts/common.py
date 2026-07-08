@@ -17,6 +17,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 DATA = ROOT / "data"
 FORECASTS = DATA / "forecasts"
+ECMWF_FORECASTS = DATA / "forecasts_ecmwf"   # second backbone (bake-off scoreboard)
 OBSERVED = DATA / "observed"
 VERIFICATION = DATA / "verification"
 SITE = ROOT / "site"

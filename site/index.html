@@ -116,6 +116,18 @@
   .bar .val { font-size: 12px; font-weight: 700; margin-top: 2px; }
   .trust .foot { font-size: 12px; color: var(--muted); margin-top: 12px; display: flex; gap: 16px; flex-wrap: wrap; }
 
+  .sb-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 4px; }
+  .sb-table th, .sb-table td { padding: 8px 10px; text-align: right; white-space: nowrap; }
+  .sb-table th:first-child, .sb-table td:first-child { text-align: left; }
+  .sb-table thead th { color: var(--muted); font-size: 11.5px; text-transform: uppercase; letter-spacing: .03em; border-bottom: 1px solid var(--line); }
+  .sb-table tbody td { border-bottom: 1px solid #f1f5f9; font-variant-numeric: tabular-nums; }
+  .sb-table .prov { font-weight: 700; } .sb-table .prov small { display:block; font-weight:500; color:var(--muted); font-size:10.5px; }
+  .sb-table td.win { background: #ecfdf5; color: #047857; font-weight: 700; border-radius: 4px; }
+  .sb-note { font-size: 12px; color: var(--muted); margin: 4px 0 12px; }
+  .sb-h2h { display: flex; gap: 10px; align-items: center; margin-top: 12px; font-size: 12.5px; flex-wrap: wrap; }
+  .sb-bar { flex: 1; min-width: 160px; height: 16px; border-radius: 8px; overflow: hidden; display: flex; background: var(--none-bg); }
+  .sb-bar .g { background: #0e7c7b; } .sb-bar .e { background: #6366f1; }
+
   .drawer-bg { position: fixed; inset: 0; background: rgba(15,23,42,.35); opacity: 0; pointer-events: none; transition: opacity .16s; z-index: 40; }
   .drawer-bg.open { opacity: 1; pointer-events: auto; }
   .drawer { position: fixed; top: 0; right: 0; height: 100%; width: 440px; max-width: 92vw; background: #fff;
@@ -216,6 +228,11 @@
   <div class="panel trust">
     <h2>Trust panel — how reliable have our calls been (since archive start)</h2>
     <div class="body" id="trust"></div>
+  </div>
+
+  <div class="panel trust" id="scoreboardPanel" hidden>
+    <h2>Backbone bake-off — free GEFS vs ECMWF, scored on IMERG truth</h2>
+    <div class="body" id="scoreboard"></div>
   </div>
 
   <footer id="footer"></footer>
