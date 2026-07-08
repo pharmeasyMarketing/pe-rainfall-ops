@@ -142,10 +142,15 @@ def open_text(path: Path):
 
 
 def write_csv_gz(path: Path, header: list[str], rows) -> None:
-    with gzip.open(path, "wt", encoding="utf-8", newline="") as f:
-        w = csv.writer(f)
-        w.writerow(header)
-        w.writerows(rows)
+    # mtime=0 -> deterministic bytes: identical content == identical file, so
+    # a regeneration that changes nothing produces no git diff (no repo bloat).
+    import io
+    with open(path, "wb") as raw:
+        with gzip.GzipFile(fileobj=raw, mode="wb", mtime=0) as gz:
+            with io.TextIOWrapper(gz, encoding="utf-8", newline="") as f:
+                w = csv.writer(f)
+                w.writerow(header)
+                w.writerows(rows)
 
 
 def archive_files(dirpath: Path) -> list[Path]:
