@@ -12,10 +12,10 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: "sample or real"
-        default: "sample"
+        description: "override mode for this run (blank = use repo var RAINOPS_MODE)"
+        default: ""
         type: choice
-        options: ["sample", "real"]
+        options: ["", "sample", "real"]
 
 concurrency:
   group: rainfall-refresh

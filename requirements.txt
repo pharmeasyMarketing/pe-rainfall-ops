@@ -2,6 +2,7 @@
 # pure Python standard library. These are only for RAINOPS_MODE=real.
 herbie-data>=2024.3        # byte-range GRIB access to NOAA GEFS on AWS
 xarray>=2024.1
+scipy>=1.11                # xarray .interp() backend (bilinear to cell centers)
 cfgrib>=0.9.11             # GRIB2 backend for xarray
 eccodes>=1.6               # cfgrib dependency (system libeccodes may also be needed)
 numpy>=1.24
