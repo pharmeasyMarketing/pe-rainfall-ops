@@ -34,6 +34,24 @@
     box-shadow: var(--shadow); white-space: nowrap; }
   .dlbtn:hover { background: var(--primary-ink); }
 
+  /* how-to note */
+  .howto { background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 12px; margin: 16px 0 4px; box-shadow: var(--shadow); }
+  .howto > summary { cursor: pointer; list-style: none; padding: 12px 15px; font-weight: 700; font-size: 14px; color: #075985; display: flex; align-items: center; gap: 8px; }
+  .howto > summary::-webkit-details-marker { display: none; }
+  .howto > summary::after { content: "▾"; margin-left: auto; font-size: 12px; transition: transform .15s; }
+  .howto[open] > summary::after { transform: rotate(180deg); }
+  .howto-body { padding: 0 16px 15px; font-size: 13.5px; color: #0c4a6e; line-height: 1.55; }
+  .howto-body p { margin: 4px 0 10px; }
+  .howto-bands { display: flex; flex-direction: column; gap: 6px; margin: 8px 0 12px; }
+  .hb { padding: 7px 11px; border-radius: 8px; font-size: 13px; }
+  .hb b { font-weight: 700; }
+  .hb.act { background: var(--act-bg); color: #9f1239; border: 1px solid #fecdd3; }
+  .hb.watch { background: var(--watch-bg); color: #9a3412; border: 1px solid #fed7aa; }
+  .hb.none { background: #f1f5f9; color: #475569; border: 1px solid var(--line); }
+  .howto-body ul { margin: 6px 0 10px; padding-left: 18px; }
+  .howto-body li { margin: 5px 0; }
+  .howto-foot { font-size: 12px; color: #0369a1; margin: 6px 0 0; }
+
   .cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 16px 0 10px; }
   .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 15px; box-shadow: var(--shadow); }
   .card .k { font-size: 12px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
@@ -176,6 +194,26 @@
     <a class="dlbtn" id="dlBtn" href="downloads/latest.csv" download>⬇ Download today's forecast (CSV)</a>
     <div class="stamp">Data as of <b id="stamp">—</b><br /><span id="meta" class="muted"></span></div>
   </header>
+
+  <details class="howto" open>
+    <summary>📖 How to use this board</summary>
+    <div class="howto-body">
+      <p>This shows the chance of <b>rain disrupting courier deliveries</b> over the next 7 days, for every pincode. Use it to plan ahead.</p>
+      <div class="howto-bands">
+        <span class="hb act"><b>ACT</b> — heavy rain likely. Plan ahead: extend delivery promises, warn customers, staff the hub.</span>
+        <span class="hb watch"><b>WATCH</b> — rain likely. Keep an eye on it and add a small buffer to delivery times.</span>
+        <span class="hb none"><b>No signal</b> — no significant rain expected.</span>
+      </div>
+      <ul>
+        <li><b>Find a pincode:</b> type it (or a city/area) in the search box, then click the row to see its full 7-day outlook.</li>
+        <li><b>Trust today &amp; tomorrow the most.</b> Days 4–7 are a rough heads-up, not a promise.</li>
+        <li><b>These are odds, not certainties.</b> An ACT day can still stay dry, and heavy rain can occasionally surprise us — use this to <i>prioritise</i>, alongside your on-ground judgement.</li>
+        <li><b>Watch the hubs.</b> The row of chips shows rain at each origin hub — rain there can affect every pincode it ships to.</li>
+        <li><b>Download</b> the full day's forecast for all pincodes with the button at the top-right.</li>
+      </ul>
+      <p class="howto-foot">Refreshes twice a day (morning &amp; afternoon). Covers the courier network only — metro pincodes served by express/hyperlocal aren't listed.</p>
+    </div>
+  </details>
 
   <section class="cards" id="cards"></section>
 
