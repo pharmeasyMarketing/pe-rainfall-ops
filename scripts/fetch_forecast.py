@@ -165,7 +165,7 @@ def main():
     # --- self-heal: backfill any missing archive date since ARCHIVE_START ----
     # Budgeted so a big backlog spreads safely across scheduled runs instead of
     # risking the 6 h Actions job limit; each run commits its progress.
-    budget_min = float(os.environ.get("RAINOPS_BACKFILL_BUDGET_MIN", "240"))
+    budget_min = float(os.environ.get("RAINOPS_BACKFILL_BUDGET_MIN", "45"))
     t0 = time.monotonic()
     have = {C.file_date(p) for p in C.archive_files(C.FORECASTS)}
     missing = [d for d in C.daterange(C.ARCHIVE_START, v0 - timedelta(days=1))
