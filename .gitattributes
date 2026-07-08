@@ -1,0 +1,10 @@
+# Take line-ending policy away from anyone's local autocrlf setting:
+# generated data + code are LF everywhere, archives are binary.
+* text=auto eol=lf
+*.csv text eol=lf
+*.py  text eol=lf
+*.js  text eol=lf
+*.md  text eol=lf
+*.yml text eol=lf
+*.json text eol=lf
+*.gz  binary

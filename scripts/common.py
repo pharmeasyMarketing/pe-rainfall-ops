@@ -148,7 +148,7 @@ def write_csv_gz(path: Path, header: list[str], rows) -> None:
     with open(path, "wb") as raw:
         with gzip.GzipFile(fileobj=raw, mode="wb", mtime=0) as gz:
             with io.TextIOWrapper(gz, encoding="utf-8", newline="") as f:
-                w = csv.writer(f)
+                w = csv.writer(f, lineterminator="\n")  # LF on every platform
                 w.writerow(header)
                 w.writerows(rows)
 

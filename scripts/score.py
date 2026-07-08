@@ -85,7 +85,7 @@ def main():
 
     C.VERIFICATION.mkdir(parents=True, exist_ok=True)
     with open(C.VERIFICATION / "scores.csv", "w", newline="", encoding="utf-8") as f:
-        w = csv.writer(f)
+        w = csv.writer(f, lineterminator="\n")
         w.writerow(["lead_day", "n", "hits", "misses", "false_alarms",
                     "correct_neg", "pod", "far", "hit_rate",
                     "watch_n", "watch_reliability"])
@@ -101,7 +101,7 @@ def main():
         n_scored=sum(b["n"] for b in by_lead),
         by_lead=by_lead,
     )
-    with open(C.VERIFICATION / "summary.json", "w", encoding="utf-8") as f:
+    with open(C.VERIFICATION / "summary.json", "w", encoding="utf-8", newline="") as f:
         json.dump(summary, f, indent=2)
 
     print(f"[score] scored {summary['n_scored']} pincode-day pairs across {len(by_lead)} leads")
