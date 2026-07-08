@@ -10,61 +10,67 @@ Static site (GitHub Pages) + a Python pipeline on GitHub Actions. **No servers, 
 the repo's `data/` folder *is* the append-only archive, maintained from **2026-06-15**
 (~250 KB/day of gzipped CSV).
 
-> **Currently running on SAMPLE data** — real pincode geography (GeoNames-geocoded), synthetic
-> monsoon rain — so the whole thing is visible and clickable before the live feeds are wired in.
-> Flip one switch to go live — see [Going live](#going-live). The dashboard shows a ⚠ SAMPLE
-> banner until then.
+> **LIVE on real data** — NOAA GEFS forecasts + NASA IMERG truth, refreshed 2×/day at
+> **https://pharmeasymarketing.github.io/pe-rainfall-ops/**. There is no sample mode; the pipeline
+> is real-only.
+
+> **Scope:** this covers the **courier** delivery network only — the 15,109 pincodes in the courier
+> dump. Metros served by hyperlocal/express (Mumbai 400001, Delhi 110001, etc.) are **not** in the
+> source data, so they won't be found in search. Add other delivery-mode pincode lists to
+> `data/pincodes.csv` to extend.
 
 ---
 
 ## The accuracy contract (read this first)
 
 No vendor sells a true pincode-level forecast — every model runs on a ~9–27 km grid, and monsoon
-convective rain is genuinely hard beyond ~2 days. So instead of pretending point accuracy, the
-dashboard earns the delivery team's trust three ways:
+convective rain is genuinely hard beyond ~2 days. Real verification (below) confirms it: the free
+27 km ensemble **systematically under-predicts localized heavy-rain magnitude**. So the dashboard
+never pretends point accuracy — it earns trust three ways:
 
-1. **Probability bands, not a single mm number** — "80% chance of >30 mm" survives forecast error.
+1. **Calibrated action bands, not a raw mm number** — thresholds are tuned against real rainfall.
 2. **Lead-time honesty** — D0–D2 are marked *actionable*, D3–D6 *directional*.
-3. **A verification / trust panel** — every past forecast is scored against what actually fell, so
-   the team sees exactly how reliable a day-1 vs a day-3 call has been.
+3. **A verification / trust panel** — every past forecast is scored against what actually fell.
 
-Action bands: **WATCH** = P(≥30 mm/24h) ≥ 40% · **ACT** = P(≥60 mm/24h) ≥ 40% or IMD-heavy
-(64.5 mm). Thresholds are illustrative — recalibrate against real delivery-slippage after ~6 weeks.
+**Bands (recalibrated per lead by `scripts/calibrate.py`):** trigger on the **ensemble median (mm)**
+— verification showed it beats P(≥30 mm) as a discriminator. Two tiers:
+- **WATCH** — a wide, cheap net (~D1 median ≥ 15 mm; ~23% reliable, catches ~40% of heavy days) →
+  soft banner / auto-extend SLA.
+- **ACT** — a precise trigger (~D1 median ≥ 40 mm; ~47% reliable, ~9× the ~5% base rate) →
+  proactive customer + hub action.
+
+Thresholds self-tune as more real data accrues, and should be re-pointed against real
+delivery-slippage cost once that data lands (phase 2).
 
 ---
 
-## Quickstart (sample data, no dependencies)
+## Quickstart (real mode)
 
-Needs only Python 3.9+ — the sample pipeline is pure standard library.
-
-```bash
-# from the repo root
-python scripts/pipeline.py          # generate sample data -> score -> build site/data.js
-```
-
-Then view the dashboard:
+Needs the GRIB/HDF5 stack and credentials — this is a live system.
 
 ```bash
-python -m http.server 8765 --directory site
-# open http://localhost:8765
+pip install -r requirements.txt
+export EARTHDATA_TOKEN=...            # free NASA Earthdata token (for IMERG)
+RAINOPS_MODE=real python scripts/pipeline.py
+python -m http.server 8765 --directory site   # then open http://localhost:8765
 ```
 
-(Opening `site/index.html` by double-click usually works too, but a local server is reliable
-across browsers.)
+Re-scoring/rebuilding the site from the existing archive (no fetch) needs no credentials:
+`python scripts/calibrate.py && python scripts/score.py && python scripts/build_site.py`.
 
 ---
 
 ## How it works
 
 ```
-GitHub Actions (cron 2x/day: 05:00 & 16:30 IST)
+GitHub Actions (cron 2x/day: 05:00 & 16:30 IST, RAINOPS_MODE=real)
   └─ scripts/pipeline.py
-       ├─ [real]  fetch_forecast.py  → NOAA GEFS 31-member ensemble (AWS Open Data, public domain)
-       ├─ [real]  fetch_observed.py  → NASA GPM IMERG Late (truth source, ~1-day lag)
-       ├─ [sample] gen_sample_data.py → synthetic monsoon data (no network/credentials)
-       ├─ score.py       → POD / FAR / reliability by lead day  → data/verification/
-       └─ build_site.py  → site/data.js  (one JS global the dashboard reads)
-  └─ commit data/ + site/  → GitHub Pages redeploys
+       ├─ fetch_forecast.py  → NOAA GEFS 31-member ensemble (AWS Open Data, public domain)
+       ├─ fetch_observed.py  → NASA GPM IMERG Late (truth source, ~1-day lag)
+       ├─ calibrate.py       → per-lead band thresholds from the real archive → calibration.json
+       ├─ score.py           → POD / FAR / reliability by lead day  → data/verification/
+       └─ build_site.py      → site/data.js + site/downloads/latest.csv (+ history shards)
+  └─ commit data/  → GitHub Pages redeploys
 ```
 
 **Why GEFS (free) not a paid API:** it's US public domain (cleanest possible licence for internal

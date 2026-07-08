@@ -1,12 +1,13 @@
-"""Assemble the dashboard payload from the per-cell archive.
+"""Assemble the dashboard payload + the daily downloadable CSV from the archive.
 
-Outputs (all generated, all gitignored — CI rebuilds them before Pages deploy):
-  site/data.js        one JS global. Day-arrays are stored ONCE PER CELL and
-                      pincodes reference their cell — that keeps 15k pincodes
-                      to a ~2 MB payload instead of ~15 MB.
-  site/hist/<XX>.json history shards (D1 forecast vs observed, last 30 days),
-                      keyed by 2-digit pincode prefix, fetched on demand when
-                      a detail drawer opens.
+Bands are recomputed here from the ensemble median + the latest calibration
+(data/verification/calibration.json), so a fresh calibration takes effect on the
+whole visible dataset immediately — the stored per-file band is ignored.
+
+Outputs (all generated, gitignored — CI rebuilds and deploys them):
+  site/data.js               one JS global (day-arrays stored once per cell)
+  site/hist/<XX>.json        history shards, fetched on demand per detail drawer
+  site/downloads/latest.csv  one row per pincode x 7-day forecast (ops download)
 
 Run:  python scripts/build_site.py
 """
@@ -14,7 +15,6 @@ from __future__ import annotations
 
 import csv
 import json
-import os
 import shutil
 from collections import defaultdict
 from datetime import timedelta
@@ -23,14 +23,10 @@ import common as C
 
 HISTORY_DAYS = 30
 BAND_CODE = {"NONE": 0, "WATCH": 1, "ACT": 2}
+BAND_NAME = ["NONE", "WATCH", "ACT"]
 
 
-def load_forecasts():
-    """Return (latest_run, run_ts, latest_cell_days, d1_index).
-
-    latest_cell_days: cell_id -> [ [mm,p10,p90,p30,p60,bcode] for D0..D6 ]
-    d1_index: (valid_date, cell_id) -> (forecast_mm, bcode)
-    """
+def load_forecasts(calib):
     files = C.archive_files(C.FORECASTS)
     if not files:
         raise SystemExit("No forecast files found. Run the pipeline first.")
@@ -42,24 +38,26 @@ def load_forecasts():
         with C.open_text(path) as f:
             for r in csv.DictReader(f):
                 if r["lead_day"] == "1":
+                    med = float(r["rain_mm_median"])
                     d1_index[(r["valid_date"], r["cell_id"])] = (
-                        float(r["rain_mm_median"]), BAND_CODE[r["band"]])
+                        med, BAND_CODE[C.band_from_median(med, 1, calib)])
 
     cell_days = defaultdict(lambda: [None] * (C.MAX_LEAD + 1))
     run_ts = None
     with C.open_text(latest_path) as f:
         for r in csv.DictReader(f):
             run_ts = r["run_ts_ist"]
-            cell_days[r["cell_id"]][int(r["lead_day"])] = [
-                float(r["rain_mm_median"]), float(r["rain_mm_p10"]),
-                float(r["rain_mm_p90"]), float(r["prob_gt30"]),
-                float(r["prob_gt60"]), BAND_CODE[r["band"]],
+            lead = int(r["lead_day"])
+            med = float(r["rain_mm_median"])
+            cell_days[r["cell_id"]][lead] = [
+                med, float(r["rain_mm_p10"]), float(r["rain_mm_p90"]),
+                float(r["prob_gt30"]), float(r["prob_gt60"]),
+                BAND_CODE[C.band_from_median(med, lead, calib)],
             ]
     return latest_run, run_ts, dict(cell_days), d1_index
 
 
 def load_observed_recent(latest, days=HISTORY_DAYS):
-    """(pincode, iso_date) -> mm for the trailing window only."""
     cutoff = C.parse_date(latest) - timedelta(days=days + 1)
     obs = {}
     for path in C.archive_files(C.OBSERVED):
@@ -71,11 +69,51 @@ def load_observed_recent(latest, days=HISTORY_DAYS):
     return obs
 
 
+def worst72(days):
+    order = None
+    for d in days[:3]:
+        if d is None:
+            continue
+        key = (d[5], d[3])
+        if order is None or key > order[0]:
+            order = (key, d)
+    return order[1][5] if order else 0
+
+
+def build_download_csv(pincodes, cell_days, latest_run, run_ts):
+    dl_dir = C.SITE / "downloads"
+    dl_dir.mkdir(parents=True, exist_ok=True)
+    header = ["pincode", "area", "state", "lat", "lon", "cell_id",
+              "forecast_generated_ist", "worst_band_72h"]
+    for L in range(C.MAX_LEAD + 1):
+        header += [f"D{L}_date", f"D{L}_rain_mm", f"D{L}_prob_gt30_pct", f"D{L}_band"]
+    rows = []
+    for p in pincodes:
+        days = cell_days.get(p["cell_id"])
+        row = [p["pincode"], p["area"], p["state"], p["lat"], p["lon"], p["cell_id"],
+               run_ts, BAND_NAME[worst72(days)] if days else ""]
+        for L in range(C.MAX_LEAD + 1):
+            d = days[L] if days else None
+            if d:
+                row += [str(C.parse_date(latest_run) + timedelta(days=L)),
+                        d[0], round(d[3] * 100), BAND_NAME[d[5]]]
+            else:
+                row += ["", "", "", ""]
+        rows.append(row)
+    rows.sort(key=lambda r: r[0])
+    with open(dl_dir / "latest.csv", "w", newline="", encoding="utf-8") as f:
+        w = csv.writer(f, lineterminator="\n")
+        w.writerow(header)
+        w.writerows(rows)
+    return (dl_dir / "latest.csv").stat().st_size
+
+
 def main():
     pincodes = C.load_pincodes()
     priority = C.load_priority()
     hubs = C.load_hubs()
-    latest_run, run_ts, cell_days, d1_index = load_forecasts()
+    calib = C.load_calibration()
+    latest_run, run_ts, cell_days, d1_index = load_forecasts(calib)
     obs = load_observed_recent(latest_run)
     latest = C.parse_date(latest_run)
 
@@ -104,24 +142,24 @@ def main():
         with open(hist_dir / f"{prefix}.json", "w", encoding="utf-8") as f:
             json.dump(data, f, separators=(",", ":"))
 
-    # --- verification --------------------------------------------------------
     ver = {}
-    vpath = C.VERIFICATION / "summary.json"
-    if vpath.exists():
-        ver = json.loads(vpath.read_text(encoding="utf-8"))
+    if (C.VERIFICATION / "summary.json").exists():
+        ver = json.loads((C.VERIFICATION / "summary.json").read_text(encoding="utf-8"))
 
-    # --- payload -------------------------------------------------------------
+    dl_bytes = build_download_csv(pincodes, cell_days, latest_run, run_ts)
+
     pins = [[p["pincode"], p["area"], p["state"], p["lat"], p["lon"],
              p["cell_id"], 1 if p["pincode"] in priority else 0]
             for p in pincodes]
     hub_rows = [[h["hub_city"], h["cell_id"], h["lat"], h["lon"]] for h in hubs]
 
     payload = dict(
-        run_mode=os.environ.get("RAINOPS_MODE", "sample").upper(),
+        run_mode="REAL",
         generated_ist=run_ts,
         archive_start=str(C.ARCHIVE_START),
-        thresholds=dict(p30_watch=C.P30_WATCH, p60_act=C.P60_ACT,
-                        imd_heavy_mm=C.IMD_HEAVY_MM, event_mm=C.EVENT_MM),
+        event_mm=C.EVENT_MM,
+        calibration=calib,
+        scope="courier",
         meta=dict(n_pincodes=len(pincodes), n_cells=len(cell_days),
                   latest_run=latest_run, history_days=HISTORY_DAYS),
         verification=ver,
@@ -132,16 +170,15 @@ def main():
 
     C.SITE.mkdir(parents=True, exist_ok=True)
     out = C.SITE / "data.js"
-    with open(out, "w", encoding="utf-8") as f:
+    with open(out, "w", encoding="utf-8", newline="\n") as f:
         f.write("// Auto-generated by scripts/build_site.py — do not edit.\n")
         f.write("window.__RAINOPS__ = ")
         json.dump(payload, f, ensure_ascii=False, separators=(",", ":"))
         f.write(";\n")
 
-    size_mb = out.stat().st_size / 1e6
-    hist_mb = sum(p.stat().st_size for p in hist_dir.glob("*.json")) / 1e6
-    print(f"[build] data.js {size_mb:.1f} MB ({len(pins)} pins, {len(cell_days)} cells) | "
-          f"hist shards: {len(shards)} files, {hist_mb:.1f} MB | run {latest_run} @ {run_ts}")
+    print(f"[build] data.js {out.stat().st_size/1e6:.1f} MB ({len(pins)} pins, "
+          f"{len(cell_days)} cells) | download {dl_bytes/1e6:.1f} MB | "
+          f"{len(shards)} hist shards | run {latest_run} @ {run_ts}")
 
 
 if __name__ == "__main__":

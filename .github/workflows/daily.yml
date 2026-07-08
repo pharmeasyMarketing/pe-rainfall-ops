@@ -9,13 +9,7 @@ on:
   schedule:
     - cron: "30 23 * * *"   # 05:00 IST — before morning dispatch planning
     - cron: "0 11 * * *"    # 16:30 IST — next-day planning
-  workflow_dispatch:
-    inputs:
-      mode:
-        description: "override mode for this run (blank = use repo var RAINOPS_MODE)"
-        default: ""
-        type: choice
-        options: ["", "sample", "real"]
+  workflow_dispatch: {}
 
 concurrency:
   group: rainfall-refresh
@@ -33,9 +27,7 @@ jobs:
       name: github-pages
       url: ${{ steps.deploy.outputs.page_url }}
     env:
-      # Until the live feeds are validated, scheduled runs stay in sample mode.
-      # Set repo variable RAINOPS_MODE=real (and secret EARTHDATA_TOKEN) to go live.
-      RAINOPS_MODE: ${{ github.event.inputs.mode || vars.RAINOPS_MODE || 'sample' }}
+      RAINOPS_MODE: real   # live system — real GEFS + IMERG only
       EARTHDATA_TOKEN: ${{ secrets.EARTHDATA_TOKEN }}
     steps:
       - uses: actions/checkout@v4
@@ -45,12 +37,7 @@ jobs:
           python-version: "3.11"
 
       - name: Install deps
-        run: |
-          if [ "$RAINOPS_MODE" = "real" ]; then
-            pip install -r requirements.txt
-          else
-            pip install numpy   # optional accel for the sample generator
-          fi
+        run: pip install -r requirements.txt
 
       - name: Refresh forecast + rebuild dashboard
         run: python scripts/pipeline.py

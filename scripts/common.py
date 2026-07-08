@@ -1,12 +1,13 @@
 """Shared constants and helpers for the rainfall-ops pipeline.
 
-Pure standard-library so the whole pipeline runs with a bare Python 3 install
-(no pip needed) in both sample mode and the real GEFS/IMERG mode.
+Pure standard-library, so the calibrate/score/build_site steps run with a bare
+Python 3 install (only the GEFS/IMERG fetchers need the requirements.txt stack).
 """
 from __future__ import annotations
 
 import csv
 import gzip
+import json
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
@@ -46,15 +47,43 @@ GRID_DEG = 0.25
 # Forecast horizon shown on the dashboard (D0..D6).
 MAX_LEAD = 6
 
-# Action-band thresholds (see plan doc S3). Calibrate against verification data.
-P30_WATCH = 0.40        # P(>=30 mm / 24h) >= 40%  -> WATCH
-P60_ACT = 0.40          # P(>=60 mm / 24h) >= 40%  -> ACT
-IMD_HEAVY_MM = 64.5     # IMD "heavy rainfall" day threshold -> ACT on median
 ACTIONABLE_MAX_LEAD = 2  # D0-D2 actionable, D3+ directional
 
 # Event definition used by the verification layer (a day "should have been
-# flagged" when observed rain meets the WATCH event threshold).
+# flagged" when observed rain meets this threshold).
 EVENT_MM = 30.0
+
+# --- Action bands -----------------------------------------------------------
+# Bands trigger on the ENSEMBLE MEDIAN (mm), which real verification showed is a
+# far better discriminator than P(>=30mm) for this dry-biased 27 km ensemble
+# (median>=40mm ~= 50% reliability vs P>=30's ~37% ceiling). Thresholds are
+# recalibrated per lead-day from the real archive by scripts/calibrate.py ->
+# data/verification/calibration.json. This default is used only before the first
+# calibration exists.
+CALIBRATION_JSON = VERIFICATION / "calibration.json"
+DEFAULT_CALIBRATION = {
+    "by_lead": {},
+    "fallback": {"watch_median_mm": 18.0, "act_median_mm": 42.0},
+    "targets": {"watch_reliability": 0.22, "act_reliability": 0.45},
+}
+
+
+def load_calibration() -> dict:
+    if CALIBRATION_JSON.exists():
+        try:
+            return json.loads(CALIBRATION_JSON.read_text(encoding="utf-8"))
+        except (ValueError, OSError):
+            pass
+    return DEFAULT_CALIBRATION
+
+
+def band_from_median(median_mm: float, lead: int, calib: dict) -> str:
+    th = calib["by_lead"].get(str(lead)) or calib["fallback"]
+    if median_mm >= th["act_median_mm"]:
+        return "ACT"
+    if median_mm >= th["watch_median_mm"]:
+        return "WATCH"
+    return "NONE"
 
 IST = timezone(timedelta(hours=5, minutes=30))
 

@@ -40,16 +40,20 @@ def main():
         cell_pins[p["cell_id"]].append(p["pincode"])
 
     obs = load_observed()
+    calib = C.load_calibration()  # score the CALIBRATED bands, not stored ones
     stats = {}
 
     for path in C.archive_files(C.FORECASTS):
         with C.open_text(path) as f:
             for r in csv.DictReader(f):
-                flagged = r["band"] in ("WATCH", "ACT")
                 lead = int(r["lead_day"])
+                band = C.band_from_median(float(r["rain_mm_median"]), lead, calib)
+                flagged = band in ("WATCH", "ACT")
+                is_act = band == "ACT"
                 valid = r["valid_date"]
                 s = stats.setdefault(lead, dict(
-                    hits=0, misses=0, fa=0, cn=0, watch_n=0, watch_hit=0))
+                    hits=0, misses=0, fa=0, cn=0,
+                    watch_n=0, watch_hit=0, act_n=0, act_hit=0))
                 for pin in cell_pins.get(r["cell_id"], ()):
                     o = obs.get((pin, valid))
                     if o is None:
@@ -67,20 +71,28 @@ def main():
                         s["watch_n"] += 1
                         if event:
                             s["watch_hit"] += 1
+                    if is_act:
+                        s["act_n"] += 1
+                        if event:
+                            s["act_hit"] += 1
 
     by_lead = []
     for lead in sorted(stats):
         s = stats[lead]
         n = s["hits"] + s["misses"] + s["fa"] + s["cn"]
-        pod = s["hits"] / (s["hits"] + s["misses"]) if (s["hits"] + s["misses"]) else None
+        events = s["hits"] + s["misses"]
+        pod = s["hits"] / events if events else None
         far = s["fa"] / (s["hits"] + s["fa"]) if (s["hits"] + s["fa"]) else None
         acc = (s["hits"] + s["cn"]) / n if n else None
         rel = s["watch_hit"] / s["watch_n"] if s["watch_n"] else None
+        act_rel = s["act_hit"] / s["act_n"] if s["act_n"] else None
         by_lead.append(dict(
             lead=lead, n=n, hits=s["hits"], misses=s["misses"],
             false_alarms=s["fa"], correct_neg=s["cn"],
             pod=pod, far=far, hit_rate=acc,
+            base_rate=events / n if n else None,
             watch_n=s["watch_n"], watch_reliability=rel,
+            act_n=s["act_n"], act_reliability=act_rel,
         ))
 
     C.VERIFICATION.mkdir(parents=True, exist_ok=True)

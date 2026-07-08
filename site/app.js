@@ -60,9 +60,15 @@
 
   // ---- header ---------------------------------------------------------------
   $("#stamp").textContent = D.generated_ist;
-  $("#meta").textContent = D.meta.n_pincodes.toLocaleString() + " pincodes · " +
+  $("#meta").textContent = D.meta.n_pincodes.toLocaleString() + " courier pincodes · " +
     D.meta.n_cells.toLocaleString() + " cells · archive since " + D.archive_start;
-  if (D.run_mode === "SAMPLE") $("#sampleBanner").hidden = false;
+  (function () {
+    var btn = $("#dlBtn");
+    if (btn) {
+      btn.href = "downloads/latest.csv?v=" + Date.now();          // always fresh
+      btn.setAttribute("download", "pe_courier_rainfall_" + (D.meta.latest_run || "today") + ".csv");
+    }
+  })();
 
   // ---- summary cards ---------------------------------------------------------
   var hubsAtRisk = 0;
@@ -224,7 +230,11 @@
     if (rows.length > RENDER_CAP) note += " — refine the search or filters to narrow down";
     $("#tfoot").textContent = note;
     if (!rows.length) {
-      var tr0 = el("tr"); tr0.appendChild(el("td", { colspan: 8, class: "muted", style: "padding:18px" }, "No pincodes match."));
+      var msg = state.search
+        ? "No match for “" + state.search + "”. This dashboard covers the "
+          + D.meta.n_pincodes.toLocaleString() + " courier pincodes only — metros served by hyperlocal/express aren't included."
+        : "No pincodes match.";
+      var tr0 = el("tr"); tr0.appendChild(el("td", { colspan: 8, class: "muted", style: "padding:18px" }, msg));
       tb.appendChild(tr0);
     }
   }
@@ -245,12 +255,13 @@
     var d1 = v.find(function (x) { return x.lead === 1; }) || v[0];
     var d3 = v.find(function (x) { return x.lead === 3; });
     var d6 = v.find(function (x) { return x.lead === 6; });
+    var base = d1.base_rate ? pct(d1.base_rate) : "~5%";
     var lead = el("p", { class: "lead" });
-    lead.innerHTML = "When we flagged <b>WATCH+</b> for <b>tomorrow (D1)</b>, ≥" + D.thresholds.event_mm +
-      " mm actually fell <b>" + pct(d1.watch_reliability) + "</b> of the time" +
-      (d3 ? ", " + pct(d3.watch_reliability) + " at D3" : "") +
-      (d6 ? ", and " + pct(d6.watch_reliability) + " by D6" : "") +
-      ". That's why <b>D0–D2 are marked actionable</b> and D3+ directional.";
+    lead.innerHTML = "Bands are <b>calibrated against real rainfall</b>. For <b>tomorrow (D1)</b>: an " +
+      "<b>ACT</b> call verifies <b>" + pct(d1.act_reliability || 0) + "</b> of the time (≥" + D.event_mm +
+      " mm actually falls), a <b>WATCH+</b> call <b>" + pct(d1.watch_reliability) + "</b> — both well above the " +
+      "<b>" + base + "</b> base rate. ACT is the precise trigger for proactive action; WATCH the wide cheap net. " +
+      "Skill fades with lead, so <b>D0–D2 are actionable</b>, D3+ directional.";
     host.appendChild(lead);
     var bars = el("div", { class: "bars" });
     v.forEach(function (x) {
@@ -265,9 +276,9 @@
     });
     host.appendChild(bars);
     var foot = el("div", { class: "foot" });
-    foot.appendChild(el("span", null, "Bars = reliability: P(≥" + D.thresholds.event_mm + " mm fell | we said WATCH+), by lead day."));
-    foot.appendChild(el("span", null, "POD D1 " + pct(d1.pod) + " · FAR D1 " + pct(d1.far) +
-      " · " + (D.verification.n_scored || 0).toLocaleString() + " pincode-days scored."));
+    foot.appendChild(el("span", null, "Bars = WATCH+ reliability: P(≥" + D.event_mm + " mm fell | flagged), by lead day."));
+    foot.appendChild(el("span", null, "D1 catches " + pct(d1.pod) + " of heavy-rain days · " +
+      (D.verification.n_scored || 0).toLocaleString() + " pincode-days scored since " + D.archive_start + "."));
     host.appendChild(foot);
   }
 
@@ -414,10 +425,16 @@
   var defBtn = document.querySelector('#filter button[data-f="' + state.filter + '"]');
   if (defBtn) defBtn.classList.add("on");
 
-  $("#footer").innerHTML = "Backbone: NOAA GEFS ensemble (public domain) · Truth: NASA GPM IMERG · " +
-    "Geocoding: <a href='https://www.geonames.org/'>GeoNames</a> (CC BY 4.0) · " +
-    "Bands: WATCH P(≥30mm)≥" + pct(D.thresholds.p30_watch) + ", ACT P(≥60mm)≥" + pct(D.thresholds.p60_act) +
-    " or IMD-heavy · One 0.25° cell ≈ 27 km — pincodes in a cell share its forecast. Built for the PharmEasy delivery team.";
+  (function () {
+    var cal = D.calibration || { by_lead: {}, fallback: { watch_median_mm: "?", act_median_mm: "?" } };
+    var th = (cal.by_lead && cal.by_lead["1"]) || cal.fallback;
+    $("#footer").innerHTML = "Backbone: NOAA GEFS ensemble (public domain) · Truth: NASA GPM IMERG · " +
+      "Geocoding: <a href='https://www.geonames.org/'>GeoNames</a> (CC BY 4.0) · " +
+      "Bands calibrated to real skill (ensemble median, tuned per lead): tomorrow WATCH ≥" +
+      Math.round(th.watch_median_mm) + "mm, ACT ≥" + Math.round(th.act_median_mm) + "mm · " +
+      "One 0.25° cell ≈ 27km — pincodes in a cell share its forecast · Courier network only " +
+      "(metros served by hyperlocal are not in this dataset). Built for the PharmEasy delivery team.";
+  })();
 
   buildMap(); renderTable(); renderTrust();
 })();

@@ -1,0 +1,82 @@
+{
+  "generated_from": {
+    "n_days": 22,
+    "start": "2026-06-15",
+    "end": "2026-07-06"
+  },
+  "event_mm": 30.0,
+  "targets": {
+    "watch_reliability": 0.22,
+    "act_reliability": 0.45
+  },
+  "method": "median-mm threshold per lead, reliability-targeted",
+  "by_lead": {
+    "0": {
+      "watch_median_mm": 18.0,
+      "act_median_mm": 35.0,
+      "watch_reliability": 0.254,
+      "watch_pod": 0.373,
+      "act_reliability": 0.463,
+      "act_pod": 0.147,
+      "n": 332398
+    },
+    "1": {
+      "watch_median_mm": 15.0,
+      "act_median_mm": 40.0,
+      "watch_reliability": 0.227,
+      "watch_pod": 0.407,
+      "act_reliability": 0.473,
+      "act_pod": 0.065,
+      "n": 317289
+    },
+    "2": {
+      "watch_median_mm": 15.0,
+      "act_median_mm": 50.0,
+      "watch_reliability": 0.223,
+      "watch_pod": 0.341,
+      "act_reliability": 0.449,
+      "act_pod": 0.024,
+      "n": 302180
+    },
+    "3": {
+      "watch_median_mm": 15.0,
+      "act_median_mm": 50.0,
+      "watch_reliability": 0.24,
+      "watch_pod": 0.34,
+      "act_reliability": 0.426,
+      "act_pod": 0.022,
+      "n": 287071
+    },
+    "4": {
+      "watch_median_mm": 15.0,
+      "act_median_mm": 40.0,
+      "watch_reliability": 0.232,
+      "watch_pod": 0.364,
+      "act_reliability": 0.419,
+      "act_pod": 0.044,
+      "n": 271962
+    },
+    "5": {
+      "watch_median_mm": 15.0,
+      "act_median_mm": 35.0,
+      "watch_reliability": 0.244,
+      "watch_pod": 0.384,
+      "act_reliability": 0.459,
+      "act_pod": 0.078,
+      "n": 256853
+    },
+    "6": {
+      "watch_median_mm": 15.0,
+      "act_median_mm": 25.0,
+      "watch_reliability": 0.275,
+      "watch_pod": 0.37,
+      "act_reliability": 0.486,
+      "act_pod": 0.214,
+      "n": 241744
+    }
+  },
+  "fallback": {
+    "watch_median_mm": 15.0,
+    "act_median_mm": 40.0
+  }
+}

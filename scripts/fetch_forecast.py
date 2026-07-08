@@ -1,7 +1,7 @@
 """REAL forecast ingest — NOAA GEFS 31-member ensemble via AWS Open Data.
 
-Writes data/forecasts/<date>.csv.gz in the PER-CELL schema shared with sample
-mode. Also SELF-HEALS the archive: any missing run date since ARCHIVE_START is
+Writes data/forecasts/<date>.csv.gz in the PER-CELL schema. Also SELF-HEALS the
+archive: any missing run date since ARCHIVE_START is
 backfilled from the GEFS AWS archive with the cycle that would have been
 available at a real 05:00 IST refresh (previous day's 12Z).
 
@@ -186,6 +186,10 @@ def summarize(vals):
 
 
 def snapshot_rows(run_date: date, run_ts: str, daily: dict) -> list:
+    # provisional band from the current calibration; build_site/score recompute
+    # authoritatively from the median + latest calibration, so this is only the
+    # archive's self-description.
+    calib = C.load_calibration()
     rows = []
     for cid in sorted(daily):
         for lead in range(C.MAX_LEAD + 1):
@@ -193,7 +197,7 @@ def snapshot_rows(run_date: date, run_ts: str, daily: dict) -> list:
             rows.append([run_ts, cid, lead, run_date + timedelta(days=lead),
                          round(med, 1), round(p10, 1), round(p90, 1),
                          round(p30, 2), round(p60, 2),
-                         C.band(p30, p60, med), C.lead_class(lead)])
+                         C.band_from_median(med, lead, calib), C.lead_class(lead)])
     return rows
 
 

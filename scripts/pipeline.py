@@ -1,13 +1,12 @@
 """Single entry point for one dashboard refresh — used by CI and locally.
 
-Mode is chosen by the RAINOPS_MODE env var:
-  * "sample" (default) -> regenerate synthetic data (no network/credentials)
-  * "real"             -> fetch NOAA GEFS forecast + NASA IMERG observed
+Real mode only (the sample generator was removed once real feeds went live):
+  fetch NOAA GEFS forecast -> fetch NASA IMERG observed -> calibrate bands
+  -> score -> rebuild the site payload.
 
-Then it always scores and rebuilds the site payload.
+Requires EARTHDATA_TOKEN (IMERG) and the GRIB stack from requirements.txt.
 
-  RAINOPS_MODE=sample python scripts/pipeline.py
-  RAINOPS_MODE=real   python scripts/pipeline.py
+  RAINOPS_MODE=real python scripts/pipeline.py
 """
 from __future__ import annotations
 
@@ -20,21 +19,19 @@ import common as C  # noqa: E402
 
 
 def main():
-    mode = os.environ.get("RAINOPS_MODE", "sample").lower()
+    mode = os.environ.get("RAINOPS_MODE", "real").lower()
+    if mode != "real":
+        raise SystemExit(
+            f"RAINOPS_MODE={mode!r} unsupported — this is a live system, real mode only.")
     C.ensure_dirs()
-    print(f"[pipeline] mode={mode}")
+    print("[pipeline] mode=real")
 
-    if mode == "sample":
-        import gen_sample_data
-        gen_sample_data.main()
-    elif mode == "real":
-        import fetch_forecast
-        fetch_forecast.main()
-        import fetch_observed
-        fetch_observed.main()
-    else:
-        raise SystemExit(f"unknown RAINOPS_MODE={mode!r} (use 'sample' or 'real')")
-
+    import fetch_forecast
+    fetch_forecast.main()
+    import fetch_observed
+    fetch_observed.main()
+    import calibrate
+    calibrate.main()
     import score
     score.main()
     import build_site
