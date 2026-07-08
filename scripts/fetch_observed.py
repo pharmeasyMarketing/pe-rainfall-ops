@@ -87,14 +87,16 @@ def read_imerg_day(day):
             # that a product revision might move (the V07 daily layout wasn't
             # confirmed until this ran against a real granule).
             paths = {}
-            h.visititems(lambda name, obj: paths.setdefault(
-                name.split("/")[-1].lower(), name) if isinstance(obj, h5py.Dataset) else None)
+
+            def _collect(name, obj):
+                # MUST return None — visititems halts on any non-None return.
+                if isinstance(obj, h5py.Dataset):
+                    paths.setdefault(name.split("/")[-1].lower(), name)
+
+            h.visititems(_collect)
             if not _structure_logged:
                 _structure_logged.append(True)
-                interesting = ("precipitation", "precipitationcal", "lon", "lat",
-                               "longitude", "latitude", "time")
-                print("[imerg] granule datasets: "
-                      + ", ".join(f"{k}{h[paths[k]].shape}" for k in interesting if k in paths))
+                print(f"[imerg] datasets found: {sorted(paths)}")
             p_name = paths.get("precipitation") or paths.get("precipitationcal")
             lon_name = paths.get("lon") or paths.get("longitude")
             lat_name = paths.get("lat") or paths.get("latitude")
