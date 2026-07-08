@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# transient IMERG download scratch
+data/_imerg_*.nc4
+
+# business-sensitive: raw dumps, order volumes, breach rates — NEVER commit.
+# The public repo only ever gets an alphabetized pincode list (no volumes).
+data-private/
+
+# generated site artifacts — CI rebuilds these from data/ before Pages deploy
+site/data.js
+site/hist/
+
+# OS
+.DS_Store
+Thumbs.db

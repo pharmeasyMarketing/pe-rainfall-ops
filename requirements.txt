@@ -1,0 +1,9 @@
+# Sample mode (gen_sample_data + score + build_site) needs NOTHING here — it is
+# pure Python standard library. These are only for RAINOPS_MODE=real.
+herbie-data>=2024.3        # byte-range GRIB access to NOAA GEFS on AWS
+xarray>=2024.1
+cfgrib>=0.9.11             # GRIB2 backend for xarray
+eccodes>=1.6               # cfgrib dependency (system libeccodes may also be needed)
+numpy>=1.24
+requests>=2.31            # IMERG download from GES DISC
+h5py>=3.10                # read IMERG .nc4/HDF5 granules

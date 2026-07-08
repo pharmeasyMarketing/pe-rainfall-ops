@@ -1,0 +1,97 @@
+"""REAL observed ingest — NASA GPM IMERG Late daily precipitation.
+
+Writes data/observed/<date>.csv (date, pincode, observed_mm) — the truth source
+the verification layer scores forecasts against.
+
+IMERG Late (GPM_3IMERGDL) is 0.1 deg, ~14 h latency, free. Access needs a NASA
+Earthdata login; put a bearer token in the EARTHDATA_TOKEN env var / CI secret
+(Earthdata profile -> Generate Token).
+
+    pip install requests h5py numpy
+    EARTHDATA_TOKEN=... RAINOPS_MODE=real python scripts/pipeline.py
+
+Fills any missing observed day from ARCHIVE_START up to (yesterday) that we don't
+already have, so a gap self-heals on the next run.
+
+--- VALIDATE ON FIRST RUN ---
+  * exact GES DISC granule URL pattern for GPM_3IMERGDL v07;
+  * the HDF5 variable path ('/Grid/precipitation') and its (lon,lat) axis order
+    and units (mm/day vs mm/hr) — IMERG daily is mm/day.
+"""
+from __future__ import annotations
+
+import os
+from datetime import date, timedelta
+
+import common as C
+
+GRANULE_TMPL = (
+    "https://gpm1.gesdisc.eosdis.nasa.gov/data/GPM_L3/GPM_3IMERGDL.07/"
+    "{y}/{m:02d}/3B-DAY-L.MS.MRG.3IMERG.{y}{m:02d}{d:02d}-S000000-E235959.V07B.nc4"
+)
+
+
+def existing_observed_dates():
+    return {C.file_date(p) for p in C.archive_files(C.OBSERVED)}
+
+
+def missing_dates():
+    have = existing_observed_dates()
+    yesterday = date.today() - timedelta(days=1)
+    return [d for d in C.daterange(C.ARCHIVE_START, yesterday)
+            if C.iso(d) not in have]
+
+
+def read_imerg_day(day):
+    """Return a callable field(lat, lon) -> mm for the given day."""
+    import h5py
+    import numpy as np
+    import requests
+
+    token = os.environ.get("EARTHDATA_TOKEN")
+    if not token:
+        raise SystemExit("EARTHDATA_TOKEN not set — needed for IMERG download.")
+    url = GRANULE_TMPL.format(y=day.year, m=day.month, d=day.day)
+    tmp = C.DATA / f"_imerg_{day}.nc4"
+    r = requests.get(url, headers={"Authorization": f"Bearer {token}"},
+                     timeout=180, allow_redirects=True)
+    r.raise_for_status()
+    tmp.write_bytes(r.content)
+    try:
+        with h5py.File(tmp, "r") as h:
+            precip = h["/Grid/precipitation"][:]        # (time, lon, lat) mm/day
+            glon = h["/Grid/lon"][:]
+            glat = h["/Grid/lat"][:]
+        precip = np.squeeze(precip)                     # (lon, lat)
+
+        def field(lat, lon):
+            i = int(np.abs(glon - lon).argmin())
+            j = int(np.abs(glat - lat).argmin())
+            v = float(precip[i, j])
+            return max(0.0, v)
+        return field
+    finally:
+        tmp.unlink(missing_ok=True)
+
+
+def main():
+    pincodes = C.load_pincodes()
+    todo = missing_dates()
+    if not todo:
+        print("[imerg] observed archive already complete")
+        return
+    for day in todo:
+        try:
+            field = read_imerg_day(day)
+        except Exception as e:  # noqa: BLE001
+            print(f"[imerg] skip {day}: {e}")
+            continue
+        rows = [[day, p["pincode"], round(field(p["lat"], p["lon"]), 1)]
+                for p in pincodes]
+        C.write_csv_gz(C.OBSERVED / f"{day}.csv.gz",
+                       ["date", "pincode", "observed_mm"], rows)
+        print(f"[imerg] wrote observed {day}")
+
+
+if __name__ == "__main__":
+    main()

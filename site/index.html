@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>PharmEasy · Rainfall Ops — Pincode Delivery Forecast</title>
+<style>
+  :root {
+    --bg: #eef2f5; --card: #ffffff; --ink: #0f172a; --muted: #64748b;
+    --line: #e2e8f0; --primary: #0e7c7b; --primary-ink: #0b5d5c;
+    --act: #e11d48; --act-bg: #fff1f3; --watch: #d97706; --watch-bg: #fff7ed;
+    --none: #8595a3; --none-bg: #f1f5f9; --ok: #16a34a;
+    --shadow: 0 1px 2px rgba(15,23,42,.06), 0 4px 16px rgba(15,23,42,.06);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--ink); background: var(--bg); -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--primary); }
+  .wrap { max-width: 1280px; margin: 0 auto; padding: 18px 18px 60px; }
+
+  header.top { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+  .logo { width: 34px; height: 34px; border-radius: 9px; background: linear-gradient(135deg,var(--primary),#12a3a1);
+    display: grid; place-items: center; color: #fff; font-size: 19px; flex: none; }
+  header.top h1 { font-size: 18px; margin: 0; letter-spacing: -.01em; }
+  header.top .sub { color: var(--muted); font-size: 12.5px; margin-top: 1px; }
+  .spacer { flex: 1; }
+  .stamp { font-size: 12px; color: var(--muted); text-align: right; }
+  .stamp b { color: var(--ink); }
+
+  .sample-banner {
+    margin: 14px 0 4px; padding: 9px 13px; border-radius: 9px; font-size: 12.5px;
+    background: #fffbeb; border: 1px solid #fde68a; color: #92400e; display: flex; gap: 8px; align-items: center;
+  }
+
+  .cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 16px 0 10px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 15px; box-shadow: var(--shadow); }
+  .card .k { font-size: 12px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+  .card .v { font-size: 26px; font-weight: 700; margin-top: 6px; letter-spacing: -.02em; }
+  .card .v small { font-size: 13px; font-weight: 600; color: var(--muted); }
+  .card.act .v { color: var(--act); } .card.watch .v { color: var(--watch); }
+
+  /* hub strip */
+  .hubstrip { display: flex; gap: 8px; flex-wrap: wrap; margin: 0 0 14px; align-items: center; }
+  .hubstrip .hlabel { font-size: 11.5px; color: var(--muted); font-weight: 700; text-transform: uppercase; letter-spacing: .05em; margin-right: 2px; }
+  .hub { display: inline-flex; align-items: center; gap: 6px; background: var(--card); border: 1px solid var(--line);
+    border-radius: 999px; padding: 5px 11px 5px 8px; font-size: 12.5px; font-weight: 600; box-shadow: var(--shadow); }
+  .hub .dot2 { width: 9px; height: 9px; border-radius: 50%; background: var(--none); }
+  .hub.watch .dot2 { background: var(--watch); } .hub.act .dot2 { background: var(--act); }
+  .hub.act { border-color: #fecdd3; background: var(--act-bg); }
+  .hub.watch { border-color: #fed7aa; background: var(--watch-bg); }
+  .hub small { color: var(--muted); font-weight: 500; }
+
+  .grid2 { display: grid; grid-template-columns: minmax(0,480px) minmax(0,1fr); gap: 14px; align-items: start; }
+  .panel { background: var(--card); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); }
+  .panel h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted);
+    margin: 0; padding: 13px 15px; border-bottom: 1px solid var(--line); }
+  .panel .body { padding: 8px 12px 12px; }
+
+  #map { width: 100%; height: auto; display: block; }
+  #map .grat { stroke: #d7e0e6; stroke-width: .6; }
+  #map .glabel { fill: #94a3b8; font-size: 8px; }
+  .dot { cursor: pointer; }
+  .dot.act { fill: var(--act); } .dot.watch { fill: var(--watch); } .dot.none { fill: var(--none); opacity: .45; }
+  .dot.dim { opacity: .10; } .dot.sel { stroke: #0f172a; stroke-width: 1.6; }
+  .hubmark { fill: #fff; stroke: #0f172a; stroke-width: 1.4; cursor: default; }
+  .hubmark.act { fill: var(--act); stroke: #fff; } .hubmark.watch { fill: var(--watch); stroke: #fff; }
+  .legend { display: flex; gap: 13px; padding: 4px 14px 12px; font-size: 12px; color: var(--muted); flex-wrap: wrap; }
+  .legend .sw { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 5px; vertical-align: -1px; }
+  .legend .sq { display: inline-block; width: 9px; height: 9px; background: #fff; border: 1.5px solid #0f172a; transform: rotate(45deg); margin-right: 6px; vertical-align: -1px; }
+
+  .controls { display: flex; gap: 8px; align-items: center; padding: 11px 12px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+  .controls input[type=search] { flex: 1; min-width: 140px; padding: 7px 10px; border: 1px solid var(--line);
+    border-radius: 8px; font: inherit; }
+  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  .seg button { border: 0; background: #fff; padding: 7px 11px; font: inherit; font-size: 12.5px; cursor: pointer; color: var(--muted); }
+  .seg button + button { border-left: 1px solid var(--line); }
+  .seg button.on { background: var(--primary); color: #fff; font-weight: 600; }
+  .cellchip { display: none; align-items: center; gap: 6px; background: #ecfeff; border: 1px solid #a5f3fc;
+    border-radius: 999px; padding: 4px 10px; font-size: 12px; font-weight: 600; color: #155e75; }
+  .cellchip button { border: 0; background: none; cursor: pointer; font-size: 13px; color: #155e75; padding: 0 2px; }
+  .cellchip.show { display: inline-flex; }
+
+  .tbl-scroll { overflow-x: auto; max-height: 560px; overflow-y: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { padding: 7px 10px; text-align: left; white-space: nowrap; }
+  thead th { position: sticky; top: 0; background: #f8fafc; color: var(--muted); font-size: 11.5px;
+    text-transform: uppercase; letter-spacing: .03em; cursor: pointer; user-select: none; border-bottom: 1px solid var(--line); z-index: 2; }
+  thead th.num, td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  tbody tr { border-bottom: 1px solid #f1f5f9; cursor: pointer; }
+  tbody tr:hover { background: #f8fafc; }
+  tbody tr.sel { background: #ecfeff; }
+  .pin { font-weight: 600; font-variant-numeric: tabular-nums; }
+  .muted { color: var(--muted); }
+  .tfoot { padding: 9px 14px; font-size: 12px; color: var(--muted); border-top: 1px solid var(--line); }
+
+  .pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11.5px; font-weight: 600; }
+  .pill.act { background: var(--act-bg); color: var(--act); } .pill.watch { background: var(--watch-bg); color: var(--watch); }
+  .pill.none { background: var(--none-bg); color: var(--none); }
+  .pill.pri { background: #e0f2fe; color: #075985; }
+  .cell { display: inline-flex; flex-direction: column; align-items: flex-end; line-height: 1.15; }
+  .cell .mm { font-weight: 600; } .cell .pp { font-size: 10.5px; color: var(--muted); }
+  .cell.wet .mm { color: var(--act); }
+
+  .trust { margin-top: 14px; }
+  .trust .body { padding: 14px 15px; }
+  .trust p.lead { margin: 0 0 12px; font-size: 13.5px; color: #334155; }
+  .trust p.lead b { color: var(--ink); }
+  .bars { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; margin-top: 6px; }
+  .bar { text-align: center; }
+  .bar .track { height: 92px; background: #f1f5f9; border-radius: 6px; position: relative; display: flex; align-items: flex-end; overflow: hidden; }
+  .bar .fill { width: 100%; border-radius: 6px 6px 0 0; }
+  .bar.act-lead .fill { background: #34b3b1; } .bar.dir-lead .fill { background: #f0b64d; }
+  .bar .lab { font-size: 11px; color: var(--muted); margin-top: 5px; }
+  .bar .val { font-size: 12px; font-weight: 700; margin-top: 2px; }
+  .trust .foot { font-size: 12px; color: var(--muted); margin-top: 12px; display: flex; gap: 16px; flex-wrap: wrap; }
+
+  .drawer-bg { position: fixed; inset: 0; background: rgba(15,23,42,.35); opacity: 0; pointer-events: none; transition: opacity .16s; z-index: 40; }
+  .drawer-bg.open { opacity: 1; pointer-events: auto; }
+  .drawer { position: fixed; top: 0; right: 0; height: 100%; width: 440px; max-width: 92vw; background: #fff;
+    box-shadow: -8px 0 30px rgba(15,23,42,.18); transform: translateX(100%); transition: transform .2s ease; z-index: 41;
+    display: flex; flex-direction: column; }
+  .drawer.open { transform: none; }
+  .drawer .dhead { padding: 16px 18px; border-bottom: 1px solid var(--line); }
+  .drawer .dhead .row { display: flex; align-items: center; gap: 10px; }
+  .drawer .dhead h3 { margin: 0; font-size: 17px; letter-spacing: -.01em; }
+  .drawer .dhead .close { margin-left: auto; border: 0; background: #f1f5f9; width: 30px; height: 30px; border-radius: 8px; cursor: pointer; font-size: 16px; color: var(--muted); }
+  .drawer .dhead .meta { color: var(--muted); font-size: 12.5px; margin-top: 3px; }
+  .drawer .dbody { padding: 14px 18px 24px; overflow-y: auto; }
+  .sec-t { font-size: 11.5px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); font-weight: 700; margin: 16px 0 8px; }
+  .sec-t:first-child { margin-top: 2px; }
+
+  .fc-row { display: grid; grid-template-columns: 78px 1fr auto; gap: 10px; align-items: center; padding: 6px 0; }
+  .fc-row .d { font-size: 12.5px; } .fc-row .d small { color: var(--muted); display: block; font-size: 10.5px; }
+  .fc-track { position: relative; height: 20px; background: #f1f5f9; border-radius: 5px; }
+  .fc-track .rng { position: absolute; top: 6px; height: 8px; background: #cbd5e1; border-radius: 4px; }
+  .fc-track .med { position: absolute; top: 2px; height: 16px; width: 3px; border-radius: 2px; background: var(--primary-ink); }
+  .fc-row .mmv { font-variant-numeric: tabular-nums; font-weight: 600; font-size: 12.5px; text-align: right; min-width: 54px; }
+  .fc-row .mmv small { display: block; font-weight: 500; color: var(--muted); font-size: 10px; }
+  .dir-note { font-size: 11.5px; color: var(--muted); margin: 8px 0 0; padding: 8px 10px; background: #f8fafc; border-radius: 8px; }
+
+  .hist { width: 100%; height: auto; display: block; margin-top: 4px; }
+  .hist-legend { font-size: 11.5px; color: var(--muted); display: flex; gap: 14px; margin-top: 6px; }
+  .hist-legend .sw { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+
+  footer { color: var(--muted); font-size: 11.5px; margin-top: 22px; text-align: center; line-height: 1.7; }
+
+  @media (max-width: 880px) {
+    .cards { grid-template-columns: repeat(2, 1fr); }
+    .grid2 { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="logo">🌧️</div>
+    <div>
+      <h1>Rainfall Ops — Pincode Delivery Forecast</h1>
+      <div class="sub">Next-7-day rainfall risk across all serviceable courier pincodes</div>
+    </div>
+    <div class="spacer"></div>
+    <div class="stamp">Data as of <b id="stamp">—</b><br /><span id="meta" class="muted"></span></div>
+  </header>
+
+  <div class="sample-banner" id="sampleBanner" hidden>
+    <b>⚠ SAMPLE DATA</b>
+    <span>Synthetic monsoon data for preview — real geography, fake rain. Live GEFS + IMERG feeds get wired in before go-live.</span>
+  </div>
+
+  <section class="cards" id="cards"></section>
+
+  <section class="hubstrip" id="hubs"></section>
+
+  <div class="grid2">
+    <div class="panel">
+      <h2>Rainfall risk map — worst band next 72h (dots = 0.25° forecast cells)</h2>
+      <div class="body"><svg id="map" viewBox="0 0 483 560" role="img" aria-label="Cell rainfall risk map"></svg></div>
+      <div class="legend">
+        <span><span class="sw" style="background:var(--act)"></span>ACT</span>
+        <span><span class="sw" style="background:var(--watch)"></span>WATCH</span>
+        <span><span class="sw" style="background:var(--none);opacity:.5"></span>No signal</span>
+        <span><span class="sq"></span>Origin hub</span>
+        <span class="muted">· click a dot to see its pincodes</span>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2 id="tblTitle">Action table — click any pincode for the 7-day view</h2>
+      <div class="controls">
+        <input type="search" id="search" placeholder="Search pincode, area or state…" />
+        <span class="cellchip" id="cellchip"><span id="cellchipLabel"></span><button id="cellchipClear" title="Clear cell filter">✕</button></span>
+        <div class="seg" id="filter">
+          <button data-f="PRI">Priority 500</button>
+          <button data-f="WATCH">WATCH+</button>
+          <button data-f="ACT">ACT</button>
+          <button data-f="ALL">All</button>
+        </div>
+      </div>
+      <div class="tbl-scroll">
+        <table id="tbl">
+          <thead><tr>
+            <th data-s="pincode">Pincode</th>
+            <th data-s="area">Area</th>
+            <th data-s="state">State</th>
+            <th class="num" data-s="d0">Today</th>
+            <th class="num" data-s="d1">Tmrw</th>
+            <th class="num" data-s="d2">+2d</th>
+            <th class="num" data-s="d3">+3d</th>
+            <th data-s="worst">72h band</th>
+          </tr></thead>
+          <tbody id="tbody"></tbody>
+        </table>
+      </div>
+      <div class="tfoot" id="tfoot"></div>
+    </div>
+  </div>
+
+  <div class="panel trust">
+    <h2>Trust panel — how reliable have our calls been (since archive start)</h2>
+    <div class="body" id="trust"></div>
+  </div>
+
+  <footer id="footer"></footer>
+</div>
+
+<div class="drawer-bg" id="drawerBg"></div>
+<aside class="drawer" id="drawer" aria-hidden="true">
+  <div class="dhead">
+    <div class="row">
+      <h3 id="dTitle">—</h3>
+      <button class="close" id="dClose" aria-label="Close">✕</button>
+    </div>
+    <div class="meta" id="dMeta"></div>
+  </div>
+  <div class="dbody" id="dBody"></div>
+</aside>
+
+<script src="data.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
