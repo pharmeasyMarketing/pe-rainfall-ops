@@ -1,0 +1,76 @@
+name: daily-rainfall-refresh
+
+# Two refreshes a day, ~30 min before the IST windows the ops team uses
+# (GitHub cron is UTC and can drift 15-40 min at peak load, so we run early).
+#
+# NOTE: this assumes the repository root IS the rainfall-ops project (scripts/,
+# data/, site/ at the top level). If you nest it, adjust the paths below.
+on:
+  schedule:
+    - cron: "30 23 * * *"   # 05:00 IST — before morning dispatch planning
+    - cron: "0 11 * * *"    # 16:30 IST — next-day planning
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "sample or real"
+        default: "sample"
+        type: choice
+        options: ["sample", "real"]
+
+concurrency:
+  group: rainfall-refresh
+  cancel-in-progress: false
+
+permissions:
+  contents: write   # commit the day's data + rebuilt site
+  pages: write      # publish to GitHub Pages
+  id-token: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    env:
+      # Until the live feeds are validated, scheduled runs stay in sample mode.
+      # Set repo variable RAINOPS_MODE=real (and secret EARTHDATA_TOKEN) to go live.
+      RAINOPS_MODE: ${{ github.event.inputs.mode || vars.RAINOPS_MODE || 'sample' }}
+      EARTHDATA_TOKEN: ${{ secrets.EARTHDATA_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install deps
+        run: |
+          if [ "$RAINOPS_MODE" = "real" ]; then
+            pip install -r requirements.txt
+          else
+            pip install numpy   # optional accel for the sample generator
+          fi
+
+      - name: Refresh forecast + rebuild dashboard
+        run: python scripts/pipeline.py
+
+      - name: Commit updated data + site
+        run: |
+          git config user.name  "rainfall-ops-bot"
+          git config user.email "actions@github.com"
+          git add -A data site
+          if git diff --cached --quiet; then
+            echo "no changes to commit"
+          else
+            git commit -m "chore: daily refresh ($RAINOPS_MODE) $(date -u +%Y-%m-%dT%H:%MZ)"
+            git push
+          fi
+
+      # Publish the freshly-built site (same working tree we just committed).
+      - uses: actions/configure-pages@v4
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - id: deploy
+        uses: actions/deploy-pages@v4
