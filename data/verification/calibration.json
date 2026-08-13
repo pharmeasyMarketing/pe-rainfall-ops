@@ -1,8 +1,8 @@
 {
   "generated_from": {
-    "n_days": 57,
+    "n_days": 58,
     "start": "2026-06-15",
-    "end": "2026-08-10"
+    "end": "2026-08-11"
   },
   "event_mm": 30.0,
   "targets": {
@@ -16,63 +16,63 @@
       "act_median_mm": 35.0,
       "watch_reliability": 0.225,
       "watch_pod": 0.542,
-      "act_reliability": 0.46,
+      "act_reliability": 0.461,
       "act_pod": 0.158,
-      "n": 861213
+      "n": 876322
     },
     "1": {
       "watch_median_mm": 18.0,
       "act_median_mm": 45.0,
-      "watch_reliability": 0.243,
-      "watch_pod": 0.396,
+      "watch_reliability": 0.241,
+      "watch_pod": 0.395,
       "act_reliability": 0.516,
       "act_pod": 0.033,
-      "n": 846104
+      "n": 861213
     },
     "2": {
-      "watch_median_mm": 18.0,
+      "watch_median_mm": 20.0,
       "act_median_mm": 45.0,
-      "watch_reliability": 0.22,
-      "watch_pod": 0.323,
+      "watch_reliability": 0.238,
+      "watch_pod": 0.266,
       "act_reliability": 0.427,
       "act_pod": 0.022,
-      "n": 830995
+      "n": 846104
     },
     "3": {
       "watch_median_mm": 18.0,
       "act_median_mm": 40.0,
-      "watch_reliability": 0.224,
-      "watch_pod": 0.259,
+      "watch_reliability": 0.223,
+      "watch_pod": 0.257,
       "act_reliability": 0.348,
-      "act_pod": 0.021,
-      "n": 815886
+      "act_pod": 0.02,
+      "n": 830995
     },
     "4": {
       "watch_median_mm": 18.0,
       "act_median_mm": 40.0,
       "watch_reliability": 0.221,
-      "watch_pod": 0.215,
+      "watch_pod": 0.213,
       "act_reliability": 0.372,
       "act_pod": 0.016,
-      "n": 800777
+      "n": 815886
     },
     "5": {
       "watch_median_mm": 18.0,
       "act_median_mm": 40.0,
       "watch_reliability": 0.229,
-      "watch_pod": 0.209,
+      "watch_pod": 0.207,
       "act_reliability": 0.379,
       "act_pod": 0.02,
-      "n": 785668
+      "n": 800777
     },
     "6": {
       "watch_median_mm": 18.0,
       "act_median_mm": 40.0,
       "watch_reliability": 0.247,
-      "watch_pod": 0.219,
+      "watch_pod": 0.217,
       "act_reliability": 0.501,
-      "act_pod": 0.027,
-      "n": 770559
+      "act_pod": 0.026,
+      "n": 785668
     }
   },
   "fallback": {
