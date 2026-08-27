@@ -54,168 +54,169 @@
     "2026-08-22",
     "2026-08-23",
     "2026-08-24",
-    "2026-08-25"
+    "2026-08-25",
+    "2026-08-26"
   ],
-  "n_days": 55,
-  "n_comparisons": 1065792,
+  "n_days": 56,
+  "n_comparisons": 1086288,
   "providers": {
     "gefs": {
       "name": "NOAA GEFS",
       "detail": "ensemble median \u00b7 ~27km \u00b7 US public domain",
       "overall": {
-        "n": 1065792,
-        "mae": 6.36,
-        "bias": 1.2,
-        "corr": 0.415,
-        "heavy_n": 56305,
-        "heavy_recall": 0.226
+        "n": 1086288,
+        "mae": 6.34,
+        "bias": 1.18,
+        "corr": 0.414,
+        "heavy_n": 56879,
+        "heavy_recall": 0.225
       }
     },
     "ecmwf": {
       "name": "ECMWF IFS",
       "detail": "HRES deterministic \u00b7 ~27km \u00b7 CC-BY-4.0",
       "overall": {
-        "n": 1065792,
-        "mae": 8.27,
-        "bias": -2.6,
-        "corr": 0.349,
-        "heavy_n": 56305,
-        "heavy_recall": 0.419
+        "n": 1086288,
+        "mae": 8.25,
+        "bias": -2.62,
+        "corr": 0.347,
+        "heavy_n": 56879,
+        "heavy_recall": 0.418
       }
     }
   },
   "by_lead": {
     "0": {
       "gefs": {
-        "n": 161040,
-        "mae": 6.15,
+        "n": 163968,
+        "mae": 6.12,
         "bias": -0.04,
         "corr": 0.563,
-        "heavy_n": 9035,
-        "heavy_recall": 0.475
+        "heavy_n": 9117,
+        "heavy_recall": 0.473
       },
       "ecmwf": {
-        "n": 161040,
-        "mae": 7.27,
-        "bias": -2.68,
+        "n": 163968,
+        "mae": 7.25,
+        "bias": -2.7,
         "corr": 0.55,
-        "heavy_n": 9035,
-        "heavy_recall": 0.605
+        "heavy_n": 9117,
+        "heavy_recall": 0.604
       }
     },
     "1": {
       "gefs": {
-        "n": 158112,
-        "mae": 6.16,
-        "bias": 0.53,
-        "corr": 0.518,
-        "heavy_n": 8663,
-        "heavy_recall": 0.373
+        "n": 161040,
+        "mae": 6.14,
+        "bias": 0.52,
+        "corr": 0.517,
+        "heavy_n": 8745,
+        "heavy_recall": 0.37
       },
       "ecmwf": {
-        "n": 158112,
-        "mae": 7.91,
+        "n": 161040,
+        "mae": 7.89,
         "bias": -3.1,
         "corr": 0.469,
-        "heavy_n": 8663,
-        "heavy_recall": 0.563
+        "heavy_n": 8745,
+        "heavy_recall": 0.562
       }
     },
     "2": {
       "gefs": {
-        "n": 155184,
-        "mae": 6.33,
-        "bias": 0.98,
-        "corr": 0.44,
-        "heavy_n": 8263,
-        "heavy_recall": 0.247
+        "n": 158112,
+        "mae": 6.31,
+        "bias": 0.97,
+        "corr": 0.438,
+        "heavy_n": 8345,
+        "heavy_recall": 0.244
       },
       "ecmwf": {
-        "n": 155184,
-        "mae": 8.27,
-        "bias": -2.99,
-        "corr": 0.388,
-        "heavy_n": 8263,
-        "heavy_recall": 0.479
+        "n": 158112,
+        "mae": 8.25,
+        "bias": -3.01,
+        "corr": 0.387,
+        "heavy_n": 8345,
+        "heavy_recall": 0.48
       }
     },
     "3": {
       "gefs": {
-        "n": 152256,
-        "mae": 6.43,
-        "bias": 1.61,
-        "corr": 0.368,
-        "heavy_n": 7979,
-        "heavy_recall": 0.155
+        "n": 155184,
+        "mae": 6.41,
+        "bias": 1.58,
+        "corr": 0.366,
+        "heavy_n": 8061,
+        "heavy_recall": 0.154
       },
       "ecmwf": {
-        "n": 152256,
-        "mae": 8.46,
-        "bias": -2.59,
-        "corr": 0.31,
-        "heavy_n": 7979,
+        "n": 155184,
+        "mae": 8.44,
+        "bias": -2.62,
+        "corr": 0.307,
+        "heavy_n": 8061,
         "heavy_recall": 0.391
       }
     },
     "4": {
       "gefs": {
-        "n": 149328,
-        "mae": 6.43,
-        "bias": 1.8,
-        "corr": 0.321,
-        "heavy_n": 7667,
-        "heavy_recall": 0.107
+        "n": 152256,
+        "mae": 6.41,
+        "bias": 1.76,
+        "corr": 0.319,
+        "heavy_n": 7749,
+        "heavy_recall": 0.106
       },
       "ecmwf": {
-        "n": 149328,
-        "mae": 8.67,
-        "bias": -2.42,
-        "corr": 0.25,
-        "heavy_n": 7667,
-        "heavy_recall": 0.309
+        "n": 152256,
+        "mae": 8.66,
+        "bias": -2.45,
+        "corr": 0.247,
+        "heavy_n": 7749,
+        "heavy_recall": 0.308
       }
     },
     "5": {
       "gefs": {
-        "n": 146400,
-        "mae": 6.52,
-        "bias": 1.83,
-        "corr": 0.284,
-        "heavy_n": 7448,
-        "heavy_recall": 0.083
+        "n": 149328,
+        "mae": 6.5,
+        "bias": 1.8,
+        "corr": 0.283,
+        "heavy_n": 7530,
+        "heavy_recall": 0.082
       },
       "ecmwf": {
-        "n": 146400,
+        "n": 149328,
         "mae": 8.65,
-        "bias": -2.24,
-        "corr": 0.221,
-        "heavy_n": 7448,
+        "bias": -2.28,
+        "corr": 0.219,
+        "heavy_n": 7530,
         "heavy_recall": 0.267
       }
     },
     "6": {
       "gefs": {
-        "n": 143472,
-        "mae": 6.55,
-        "bias": 1.87,
-        "corr": 0.265,
-        "heavy_n": 7250,
+        "n": 146400,
+        "mae": 6.53,
+        "bias": 1.84,
+        "corr": 0.263,
+        "heavy_n": 7332,
         "heavy_recall": 0.07
       },
       "ecmwf": {
-        "n": 143472,
-        "mae": 8.77,
-        "bias": -2.1,
-        "corr": 0.183,
-        "heavy_n": 7250,
+        "n": 146400,
+        "mae": 8.75,
+        "bias": -2.14,
+        "corr": 0.182,
+        "heavy_n": 7332,
         "heavy_recall": 0.25
       }
     }
   },
   "head_to_head": {
-    "gefs_closer": 472137,
-    "ecmwf_closer": 354102,
-    "ties": 239553,
+    "gefs_closer": 481077,
+    "ecmwf_closer": 360354,
+    "ties": 244857,
     "gefs_win_pct": 44.3,
     "ecmwf_win_pct": 33.2
   }
